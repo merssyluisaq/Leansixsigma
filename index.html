@@ -5759,43 +5759,78 @@ function buildTableNav(e,prefix,i,j){
 }
 
 // Paste from Excel: a copied Excel block is tab-separated rows with \n between rows
+// Pegado desde Excel: limpia el bloque (quita fila de títulos y columna de n.º de muestra)
+function chartClipGrid(text, expectedCols){
+  const num=c=>{let t=String(c).trim().replace(/\s/g,'');if(t==='')return NaN;
+    if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(t)) t=t.replace(/\./g,'').replace(',','.'); else t=t.replace(',','.');
+    return /^-?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(t)?parseFloat(t):NaN;};
+  let lines=text.replace(/\r/g,'').split('\n');
+  while(lines.length&&lines[lines.length-1].trim()==='') lines.pop();
+  let grid=lines.map(l=>l.split('\t')).filter(r=>r.some(c=>String(c).trim()!==''));
+  let header=false, idcol=false;
+  if(grid.length>1 && grid[0].every(c=>isNaN(num(c)))){grid.shift();header=true;}
+  if(grid.length>=2 && grid[0].length>=2){
+    const seq=grid.every((r,i)=>num(r[0])===i+1);
+    if(seq && (expectedCols==null || grid[0].length===expectedCols+1 || grid[0].length>expectedCols)) {grid=grid.map(r=>r.slice(1));idcol=true;}
+  }
+  return {grid:grid.map(r=>r.map(num)), header, idcol, num};
+}
+
 function buildTablePaste(e, prefix, startI, startJ){
   const text=(e.clipboardData||window.clipboardData).getData('text');
   if(!text||!text.includes('\t'))return; // single value → let default handle
   e.preventDefault();
-  const rows=text.trim().split(/\r?\n/);
-  const k=BUILD_STATE[prefix].k, n=BUILD_STATE[prefix].n;
   const msg=document.getElementById(prefix+'-pmsg');
-  // Validate: all rows should have the same number of columns
-  const colCounts=rows.map(r=>r.split('\t').length);
+  const setMsg=(t,cls)=>{if(msg){msg.textContent=t;msg.className='pmsg '+cls;}};
+  let k=BUILD_STATE[prefix].k, n=BUILD_STATE[prefix].n;
+  const fresh=(startI===0&&startJ===0);
+  const g=chartClipGrid(text, fresh?null:n);
+  const grid=g.grid;
+  if(!grid.length){setMsg('⚠ No se encontraron datos numéricos en lo que pegaste.','err');return;}
+  const colCounts=grid.map(r=>r.length);
   const uniqueCounts=[...new Set(colCounts)];
   if(uniqueCounts.length>1){
-    if(msg){msg.textContent='⚠ Parece que pegaste una tabla con filas que tienen distinta cantidad de columnas ('+uniqueCounts.join(', ')+'). Verifica que cada fila tenga la misma cantidad de valores antes de pegar.';msg.className='pmsg err';}
+    setMsg('⚠ Parece que pegaste una tabla con filas que tienen distinta cantidad de columnas ('+uniqueCounts.join(', ')+'). Verifica que cada fila tenga la misma cantidad de valores antes de pegar.','err');
     return;
   }
-  const pastedCols=colCounts[0];
-  // Validate: pasted column count should match the table's sample size (n)
-  if(pastedCols>n){
-    if(msg){msg.textContent=`⚠ Los datos que pegaste tienen ${pastedCols} observaciones por fila, pero esta tabla está configurada con n = ${n}. Este simulador admite n entre 2 y 10 (usa las constantes A₂, D₃, D₄ de cartas de control, que solo están tabuladas hasta n = 10). Define "Observaciones por muestra (n)" en ${Math.min(10,pastedCols)} arriba, haz clic en "Crear tabla" de nuevo, y vuelve a pegar.`;msg.className='pmsg err';}
-    return;
+  const pastedCols=colCounts[0], R=grid.length;
+  let note='';
+  if(fresh){
+    // Pegado desde la primera celda: la tabla se ajusta sola al tamaño de los datos
+    if(pastedCols<2||pastedCols>10){setMsg('⚠ Los datos tienen '+pastedCols+' observaciones por fila; este simulador admite n entre 2 y 10 (constantes A₂, D₃, D₄ tabuladas hasta n = 10).','err');return;}
+    if(R<2||R>30){setMsg('⚠ Los datos tienen '+R+' muestras; el simulador admite entre 2 y 30.','err');return;}
+    if(pastedCols!==n||R!==k){
+      document.getElementById(prefix+'-k').value=R;
+      document.getElementById(prefix+'-n').value=pastedCols;
+      buildEmptyTable(prefix);
+      k=R;n=pastedCols;
+      note='ℹ️ La tabla se ajustó automáticamente a '+R+' muestras × '+pastedCols+' observaciones.';
+    }
+  } else {
+    if(pastedCols>n){
+      setMsg('⚠ Los datos que pegaste tienen '+pastedCols+' observaciones por fila, pero esta tabla está configurada con n = '+n+'. Pega desde la primera celda (Muestra 1, Obs 1) para que la tabla se ajuste sola, o cambia n arriba y pulsa "Crear tabla".','err');
+      return;
+    }
+    if(startI+R>k){
+      setMsg('⚠ Pegaste '+R+' filas desde la muestra '+(startI+1)+', pero la tabla tiene solo '+k+' muestras. Pega desde la primera celda para que se ajuste sola.','err');
+      return;
+    }
+    if(pastedCols<n) note='ℹ️ Pegaste '+pastedCols+' valor(es) por fila y la tabla tiene n = '+n+'; completa el resto manualmente.';
   }
-  if(pastedCols<n){
-    if(msg){msg.textContent=`ℹ️ Nota: los datos que pegaste tienen ${pastedCols} valor(es) por fila, pero esta tabla está configurada con n = ${n}. Las columnas restantes quedaron vacías — complétalas manualmente, o vuelve a crear la tabla con n = ${pastedCols} si eso coincide con tus datos.`;msg.className='pmsg ok';}
-  }
-  let ci=startI, cj=startJ;
-  rows.forEach(row=>{
-    const cells=row.split('\t');
-    cells.forEach(cell=>{
-      if(ci>=k) return;
-      const v=parseFloat(cell.replace(',','.'));
-      const inp=document.querySelector(`#${prefix}-table-wrap input[data-i="${ci}"][data-j="${cj}"]`);
-      if(inp&&!isNaN(v)){inp.value=v.toFixed(2);}
-      cj++;
-      if(cj>=n){cj=0;ci++;}
+  let bad=0;
+  grid.forEach((row,ri)=>{
+    row.forEach((v,cj)=>{
+      const inp=document.querySelector('#'+prefix+'-table-wrap input[data-i="'+(startI+ri)+'"][data-j="'+(startJ+cj)+'"]');
+      if(!inp) return;
+      if(isNaN(v)){bad++;return;}
+      inp.value=v;
     });
   });
-  // Recalculate all rows
   for(let i=0;i<k;i++) recalcBuiltRow(prefix,i);
+  if(g.header) note+=(note?' ':'')+'Se omitió la fila de títulos.';
+  if(g.idcol) note+=(note?' ':'')+'Se omitió la columna de n.º de muestra.';
+  if(bad) note+=(note?' ':'')+bad+' celda(s) vacía(s) o no numérica(s) quedaron sin llenar.';
+  setMsg(note||('✔ '+R+' muestras pegadas.'), 'ok');
 }
 
 function fillExampleTable(withOOC,prefix){
@@ -5999,60 +6034,54 @@ function attribTableNav(e,type,i,j){
 function attribTablePaste(e,type,startI,startJ){
   const text=(e.clipboardData||window.clipboardData).getData('text');
   if(!text) return;
-  const {k,cols}=ATTRIB_STATE[type]||{k:0,cols:[]};
+  let {k,cols}=ATTRIB_STATE[type]||{k:0,cols:[]};
   const n=cols.length;
-  const rows=text.trim().split(/\r?\n/);
-  const hasTabs=rows.some(r=>r.includes('\t'));
   const msg=document.getElementById(type+'-pmsg');
-  // If pasting a single value with no tabs/newlines, let default paste happen
-  if(!hasTabs&&rows.length===1&&n===1) return;
+  const setMsg=(t,cls)=>{if(msg){msg.textContent=t;msg.className='pmsg '+cls;}};
+  const hasBlock=/[\t\n]/.test(text.trim());
+  // Un solo valor sin tabulaciones ni saltos: pegado normal
+  if(!hasBlock&&n===1) return;
   e.preventDefault();
-  if(!hasTabs){
-    // Single column of values: fill DOWN the starting column only (e.g. paste all "Defective items" first, then all "Sample size")
-    if(rows.length>(k-startI)){
-      if(msg){msg.textContent=`⚠ Pegaste ${rows.length} valores comenzando en la muestra ${startI+1}, pero la tabla solo tiene ${k} muestras (${k-startI} filas disponibles desde aquí). Aumenta "Número de muestras (k)" y haz clic en "Crear tabla" de nuevo antes de pegar, o pega menos valores.`;msg.className='pmsg err';}
+  const fresh=(startI===0&&startJ===0);
+  const g=chartClipGrid(text, n);
+  let grid=g.grid;
+  if(!grid.length){setMsg('⚠ No se encontraron datos numéricos en lo que pegaste.','err');return;}
+  const uniqueCounts=[...new Set(grid.map(r=>r.length))];
+  if(uniqueCounts.length>1){
+    setMsg('⚠ Parece que pegaste una tabla con filas que tienen distinta cantidad de columnas ('+uniqueCounts.join(', ')+'). Verifica que cada fila tenga la misma cantidad de valores, o pega cada columna por separado (una a la vez).','err');
+    return;
+  }
+  const pastedCols=grid[0].length, R=grid.length;
+  if(pastedCols>n-startJ){
+    setMsg('⚠ Pegaste '+pastedCols+' columna(s), pero esta carta necesita '+n+' ('+cols.map(c=>c.label).join(', ')+'). Pega una tabla con '+n+' columnas, o pega cada columna por separado en su primera celda.','err');
+    return;
+  }
+  let note='';
+  if(startI+R>k){
+    if(fresh||startI===0){
+      if(R>30){setMsg('⚠ Pegaste '+R+' muestras; el simulador admite hasta 30.','err');return;}
+      document.getElementById(type+'-k').value=R;
+      buildAttribTable(type);
+      k=R;
+      note='ℹ️ La tabla se ajustó automáticamente a '+R+' muestras.';
+    } else {
+      setMsg('⚠ Pegaste '+R+' filas desde la muestra '+(startI+1)+', pero la tabla tiene solo '+k+' muestras. Pega desde la primera celda para que se ajuste sola.','err');
       return;
     }
-    let ci=startI;
-    rows.forEach(cell=>{
-      if(ci>=k) return;
-      const v=parseFloat(cell.replace(',','.').trim());
-      const inp=document.querySelector(`#${type}-table-wrap input[data-i="${ci}"][data-j="${startJ}"]`);
-      if(inp&&!isNaN(v)){inp.value=Math.round(v);}
-      ci++;
-    });
-    if(msg&&msg.className==='pmsg err') {msg.textContent='';msg.className='pmsg';}
-    return;
   }
-  // Multi-column paste (tab-separated): validate consistent column counts first
-  const colCounts=rows.map(r=>r.split(/\t/).length);
-  const uniqueCounts=[...new Set(colCounts)];
-  if(uniqueCounts.length>1){
-    if(msg){msg.textContent=`⚠ Parece que pegaste una tabla con filas que tienen distinta cantidad de columnas (${uniqueCounts.join(', ')}). Verifica que cada fila tenga la misma cantidad de valores, o pega cada columna por separado (una a la vez).`;msg.className='pmsg err';}
-    return;
-  }
-  if(colCounts[0]!==n){
-    if(msg){msg.textContent=`⚠ Pegaste ${colCounts[0]} columna(s), pero esta carta necesita ${n} (${cols.map(c=>c.label).join(', ')}). Pega una tabla con ${n} columnas, o pega cada columna por separado en su primera celda.`;msg.className='pmsg err';}
-    return;
-  }
-  if(rows.length>(k-startI)){
-    if(msg){msg.textContent=`⚠ Pegaste ${rows.length} filas comenzando en la muestra ${startI+1}, pero la tabla solo tiene ${k} muestras (${k-startI} filas disponibles desde aquí). Aumenta "Número de muestras (k)" y haz clic en "Crear tabla" de nuevo antes de pegar.`;msg.className='pmsg err';}
-    return;
-  }
-  // Fill row by row
-  let ci=startI, cj=startJ;
-  rows.forEach(row=>{
-    const cells=row.split(/\t/);
-    cells.forEach(cell=>{
-      if(ci>=k) return;
-      const v=parseFloat(cell.replace(',','.').trim());
-      const inp=document.querySelector(`#${type}-table-wrap input[data-i="${ci}"][data-j="${cj}"]`);
-      if(inp&&!isNaN(v)){inp.value=Math.round(v);}
-      cj++;
-      if(cj>=n){cj=0;ci++;}
+  let bad=0;
+  grid.forEach((row,ri)=>{
+    row.forEach((v,cj)=>{
+      const inp=document.querySelector('#'+type+'-table-wrap input[data-i="'+(startI+ri)+'"][data-j="'+(startJ+cj)+'"]');
+      if(!inp) return;
+      if(isNaN(v)){bad++;return;}
+      inp.value=Math.round(v);
     });
   });
-  if(msg&&msg.className==='pmsg err') {msg.textContent='';msg.className='pmsg';}
+  if(g.header) note+=(note?' ':'')+'Se omitió la fila de títulos.';
+  if(g.idcol) note+=(note?' ':'')+'Se omitió la columna de n.º de muestra.';
+  if(bad) note+=(note?' ':'')+bad+' celda(s) vacía(s) o no numérica(s) quedaron sin llenar.';
+  setMsg(note||('✔ '+R+' muestras pegadas.'), 'ok');
 }
 
 function getAttribData(type){
@@ -10191,7 +10220,7 @@ function renderGRRpanel(){
     +'</div></div>';
 
   // Data table - FLAT layout: rows=parts, cols=op+rep pairs
-  var tHead1='<tr><th rowspan="2" style="background:#1a1a18;color:#fff;padding:8px 10px;text-align:center;vertical-align:middle;min-width:50px;">Part</th>';
+  var tHead1='<tr><th rowspan="2" style="background:#1a1a18;color:#fff;padding:8px 10px;text-align:center;vertical-align:middle;min-width:50px;">Parte</th>';
   var tHead2='<tr>';
   for(var o=0;o<GS.operators;o++){
     tHead1+='<th colspan="'+GS.reps+'" style="background:#185FA5;color:#fff;padding:7px 10px;text-align:center;">Operador '+opNames[o]+'</th>';
@@ -10210,7 +10239,7 @@ function renderGRRpanel(){
         tBody+='<td style="padding:3px;border-bottom:1px solid #e2e8f0;"><input type="number" step="0.001" value="'+v+'"'
           +' data-o="'+op+'" data-p="'+p+'" data-r="'+rep+'"'
           +' style="width:72px;border:1px solid #dde3ec;border-radius:5px;padding:5px 4px;text-align:center;font-size:12px;font-family:monospace;background:#fff;"'
-          +' oninput="grrSetValDirect(this)"></td>';
+          +' oninput="grrSetValDirect(this)" onpaste="grrCellPaste(event,this)"></td>';
       }
     }
     tBody+='</tr>';
@@ -10299,7 +10328,7 @@ function renderGRRpanel(){
     +'</div></div>';
 
   var varPanel='<div id="grr-var-panel" style="display:'+(GS.subMode==='var'?'block':'none')+'">'
-    +cfgVar+dataTable+alphaBox+pBox+hypoBox
+    +cfgVar+grrPasteBox('var')+dataTable+alphaBox+pBox+hypoBox
     +'<div id="grr-results-var"></div>'
     +'</div>';
   var attPanel='<div id="grr-att-panel" style="display:'+(GS.subMode==='att'?'block':'none')+'">'
@@ -10820,7 +10849,7 @@ function buildGRRattHTML(){
   var allOps=['Referencia'].concat(ops);
   var cats=GKS.categories;
   var nP=GKS.parts;
-  var thOps='<th style="background:#1a1a18;color:#fff;padding:7px 10px;white-space:nowrap;">Part</th>';
+  var thOps='<th style="background:#1a1a18;color:#fff;padding:7px 10px;white-space:nowrap;">Parte</th>';
   for(var ti=0;ti<allOps.length;ti++){
     thOps+='<th style="background:'+(allOps[ti]==='Ref'?'#B23B17':'#185FA5')+';color:#fff;padding:7px 10px;white-space:nowrap;">'+allOps[ti]+'</th>';
   }
@@ -10846,6 +10875,7 @@ function buildGRRattHTML(){
     +'<button onclick="grrLoadAttSample()"'
     +' style="width:100%;background:#185FA5;color:#fff;border:none;border-radius:6px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;">&#x1F4CB; Cargar ejemplo</button>'
     +'</div></div>'
+    +grrPasteBox('att')
     +'<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;overflow-x:auto;">'
     +'<div style="font-size:11px;font-weight:700;color:#5a5a54;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;">Calificaciones por Atributo</div>'
     +'<table style="border-collapse:collapse;font-size:12px;"><thead><tr>'+thOps+'</tr></thead><tbody>'+rows+'</tbody></table>'
@@ -10887,8 +10917,8 @@ function grrAttUpdate(){
   }
   var avgK=allKappas.length?allKappas.reduce(function(a,b){return a+b;},0)/allKappas.length:0;
   el.innerHTML='<div style="background:'+kBg(avgK)+';border-radius:10px;padding:13px 16px;margin-bottom:16px;border-left:4px solid '+kClr(avgK)+'">'
-    +'<div style="font-size:14px;font-weight:800;color:'+kClr(avgK)+';margin-bottom:4px;">'+grrIco(avgK>=0.9?'ok':avgK>=0.7?'wn':'no')+' '+kLbl(avgK)+' &mdash; Average &#x3BA; = '+avgK.toFixed(3)+'</div>'
-    +'<div style="font-size:12px;color:#374151;">'+(avgK>=0.9?'Altamente consistente. Procede con la recolección de datos de atributos.':avgK>=0.7?'Acceptable. Operador training may improve consistency.':'Inconsistente. Revisa los criterios o vuelve a capacitar a los operadores.')+'</div>'
+    +'<div style="font-size:14px;font-weight:800;color:'+kClr(avgK)+';margin-bottom:4px;">'+grrIco(avgK>=0.9?'ok':avgK>=0.7?'wn':'no')+' '+kLbl(avgK)+' &mdash; &#x3BA; promedio = '+avgK.toFixed(3)+'</div>'
+    +'<div style="font-size:12px;color:#374151;">'+(avgK>=0.9?'Altamente consistente. Procede con la recolección de datos de atributos.':avgK>=0.7?'Aceptable. La capacitación de los operarios puede mejorar la consistencia.':'Inconsistente. Revisa los criterios o vuelve a capacitar a los operadores.')+'</div>'
     +'</div>'
     +'<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;overflow-x:auto;">'
     +'<div style="font-size:13px;font-weight:700;margin-bottom:10px;">Resultados de Kappa de Cohen</div>'
@@ -10910,6 +10940,151 @@ function grrAttUpdate(){
     +'<div style="background:#FBE3DE;border-radius:6px;padding:8px;text-align:center;"><div style="font-weight:700;color:#7f1d1d;">&#x3BA; &lt; 0.50</div><div style="color:#5a5a54;font-size:11px;">Deficiente</div></div>'
     +'</div></div>';
   el.innerHTML += buildConcordanceHTML();
+}
+
+// ── Pegar desde Excel ───────────────────────────────────────────────────
+function grrPasteBox(kind){
+  var isAtt = kind==='att';
+  var ph = isAtt
+    ? 'Referencia\tOperario 1\tOperario 2&#10;0\t0\t1&#10;1\t1\t1&#10;...'
+    : '10.02\t10.01\t10.05\t10.04&#10;9.98\t9.99\t10.00\t10.01&#10;...';
+  var help = isAtt
+    ? 'Columnas: <b>Referencia</b>, <b>Operario 1</b>, <b>Operario 2</b>… &nbsp;|&nbsp; Filas: una por parte. Valores: <b>0 = Conforme</b>, <b>1 = No conforme</b> (o escribe &laquo;Conforme&raquo; / &laquo;No conforme&raquo;).'
+    : 'Columnas: <b>Operador A Rep.1, Rep.2…, Operador B Rep.1, Rep.2…</b> (en el mismo orden de la tabla) &nbsp;|&nbsp; Filas: una por parte. El n.&ordm; de operadores se calcula con las columnas y las <b>réplicas</b> configuradas arriba ('+GS.reps+').';
+  return '<div style="background:#E6F1FB;border:1.5px solid #85B7EB;border-radius:10px;padding:14px 16px;margin-bottom:18px;">'
+    +'<div style="font-size:13px;font-weight:700;color:#185FA5;margin-bottom:6px;">&#x1F4CB; Pegar datos desde Excel</div>'
+    +'<div style="font-size:12px;color:#1a1a18;line-height:1.6;margin-bottom:8px;">Copia el rango en Excel (Ctrl+C), pégalo aquí (Ctrl+V) y pulsa <b>Aplicar datos</b>. '
+    +'Si incluye una fila de títulos o una columna con el n.&ordm; de parte, se omiten solos.<br>'+help
+    +(isAtt?'':'<br>Tambi&eacute;n puedes pegar directamente sobre cualquier celda de la tabla: se llenará desde esa celda hacia la derecha y hacia abajo.')+'</div>'
+    +'<textarea id="grr-paste-'+kind+'" rows="5" placeholder="'+ph+'" style="width:100%;box-sizing:border-box;border:1px solid #85B7EB;border-radius:6px;padding:8px;font-family:monospace;font-size:12px;resize:vertical;"></textarea>'
+    +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;">'
+    +'<label style="font-size:12px;color:#1a1a18;"><input type="checkbox" id="grr-paste-skip-'+kind+'"> La primera columna es el n.&ordm; de parte (omitir)</label>'
+    +'<button onclick="grrPasteApply(\''+kind+'\')" style="background:#185FA5;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;">Aplicar datos</button>'
+    +'<button onclick="document.getElementById(\'grr-paste-'+kind+'\').value=\'\';grrPasteMsg(\''+kind+'\',\'\',true)" style="background:transparent;color:#185FA5;border:1px solid #185FA5;border-radius:6px;padding:7px 12px;font-size:12px;cursor:pointer;">Limpiar</button>'
+    +'</div>'
+    +'<div id="grr-paste-msg-'+kind+'" style="font-size:12px;margin-top:8px;"></div>'
+    +'</div>';
+}
+
+function grrPasteMsg(kind, msg, ok){
+  var m=document.getElementById('grr-paste-msg-'+kind);
+  if(!m) return;
+  m.innerHTML = msg ? '<span style="color:'+(ok?'#0F6E56':'#B23B17')+';font-weight:600;">'+(ok?'&#x2714; ':'&#x26A0; ')+msg+'</span>' : '';
+}
+
+function grrNum(s){
+  s=String(s==null?'':s).replace(/\s/g,'');
+  if(s==='') return NaN;
+  if(/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s=s.replace(/\./g,'').replace(',','.');
+  else s=s.replace(',','.');
+  return /^-?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s) ? parseFloat(s) : NaN;
+}
+
+function grrAttVal(s){
+  var t=String(s==null?'':s).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ');
+  if(t==='0') return 0;
+  if(t==='1') return 1;
+  if(['conforme','ok','pasa','bueno','aprobado','buena'].indexOf(t)>=0) return 0;
+  if(['no conforme','noconforme','nok','no ok','falla','malo','rechazado','defectuoso','mala'].indexOf(t)>=0) return 1;
+  return null;
+}
+
+function grrClipRows(txt, textMode){
+  var lines=String(txt).replace(/\r/g,'').split('\n');
+  while(lines.length && lines[lines.length-1].trim()==='') lines.pop();
+  var rows=lines.map(function(l){
+    if(l.indexOf('\t')>=0) return l.split('\t');
+    if(l.indexOf(';')>=0) return l.split(';');
+    return textMode ? l.trim().split(/\s{2,}|,/) : l.trim().split(/\s+/);
+  });
+  return rows.filter(function(r){ return r.some(function(c){return String(c).trim()!=='';}); });
+}
+
+function grrCellPaste(e, inp){
+  var cd=e.clipboardData||window.clipboardData; if(!cd) return;
+  var txt=cd.getData('text'); if(!txt) return;
+  var rows=grrClipRows(txt,false);
+  if(!rows.length) return;
+  e.preventDefault();
+  var p0=+inp.getAttribute('data-p'), c0=(+inp.getAttribute('data-o'))*GS.reps+(+inp.getAttribute('data-r'));
+  var maxC=GS.operators*GS.reps, n=0, clipped=false, bad=0;
+  for(var ri=0; ri<rows.length; ri++){
+    var p=p0+ri; if(p>=GS.parts){clipped=true;break;}
+    for(var ci=0; ci<rows[ri].length; ci++){
+      var c=c0+ci; if(c>=maxC){clipped=true;break;}
+      var raw=String(rows[ri][ci]).trim(); if(raw==='') continue;
+      var v=grrNum(raw); if(isNaN(v)){bad++;continue;}
+      var o=Math.floor(c/GS.reps), r=c%GS.reps;
+      if(!GS.data[o]) GS.data[o]={};
+      if(!GS.data[o][p]) GS.data[o][p]=[];
+      GS.data[o][p][r]=v; n++;
+    }
+  }
+  renderGRRpanel();
+  var note = n+' valor(es) pegado(s)'+(clipped?' (se ignoró lo que excedía la tabla)':'')+(bad?' — '+bad+' celda(s) no numérica(s) omitida(s)':'')+'.';
+  grrPasteMsg('var', note, n>0);
+}
+
+function grrPasteApply(kind){
+  var isAtt = kind==='att';
+  var ta=document.getElementById('grr-paste-'+kind); if(!ta) return;
+  var rows=grrClipRows(ta.value, isAtt);
+  if(!rows.length){ grrPasteMsg(kind,'Pega primero los datos copiados de Excel.',false); return; }
+  var parse = isAtt ? grrAttVal : function(c){ var v=grrNum(c); return isNaN(v)?null:v; };
+  var blank = function(c){ return String(c==null?'':c).trim()===''; };
+  // Fila de títulos: ninguna celda interpretable
+  if(rows.length>1 && rows[0].every(function(c){ return parse(c)===null; })) rows.shift();
+  // Columna de n.º de parte
+  var skipBox=document.getElementById('grr-paste-skip-'+kind);
+  var first=rows.map(function(r){return r[0];});
+  var firstBad = isAtt ? first.some(function(c){return parse(c)===null;}) : first.every(function(c){return parse(c)===null;});
+  var dropFirst = (skipBox && skipBox.checked) || firstBad;
+  if(dropFirst) rows=rows.map(function(r){return r.slice(1);});
+  var C=Math.max.apply(null, rows.map(function(r){return r.length;}));
+  var R=rows.length;
+  if(!C){ grrPasteMsg(kind,'No se encontraron columnas con datos.',false); return; }
+  // Validar
+  var vals=[];
+  for(var i=0;i<R;i++){
+    vals.push([]);
+    for(var j=0;j<C;j++){
+      var cell=rows[i][j];
+      if(cell===undefined || blank(cell)){
+        if(isAtt){ grrPasteMsg(kind,'Falta un valor en la fila '+(i+1)+', columna '+(j+1)+'.',false); return; }
+        vals[i].push(NaN); continue;
+      }
+      var v=parse(cell);
+      if(v===null){ grrPasteMsg(kind,'Valor no válido «'+String(cell).trim()+'» en la fila '+(i+1)+', columna '+(j+1)+(isAtt?' (usa 0, 1, Conforme o No conforme).':' (se esperaba un número).'),false); return; }
+      vals[i].push(v);
+    }
+  }
+  if(isAtt){
+    var nOps=C-1;
+    if(nOps<2 || nOps>8){ grrPasteMsg(kind,'Se necesitan de 2 a 8 operarios además de la Referencia (columnas pegadas: '+C+').',false); return; }
+    if(R<5 || R>100){ grrPasteMsg(kind,'El número de partes debe estar entre 5 y 100 (filas pegadas: '+R+').',false); return; }
+    GKS.operators=nOps; GKS.parts=R; GKS.data={};
+    for(var c=0;c<C;c++){
+      var key = c===0 ? 'Referencia' : 'Operario '+c;
+      GKS.data[key]=vals.map(function(r){return r[c];});
+    }
+    grrRebuildAtt();
+    grrPasteMsg('att','Datos cargados: '+R+' partes, Referencia y '+nOps+' operarios.',true);
+  } else {
+    if(C % GS.reps !== 0){ grrPasteMsg(kind,'Pegaste '+C+' columnas, que no es múltiplo de las réplicas configuradas ('+GS.reps+'). Ajusta «Réplicas» o revisa las columnas.',false); return; }
+    var nO=C/GS.reps;
+    if(nO<2 || nO>20){ grrPasteMsg(kind,'El número de operadores debe estar entre 2 y 20 (resultan '+nO+').',false); return; }
+    if(R<2 || R>50){ grrPasteMsg(kind,'El número de partes debe estar entre 2 y 50 (filas pegadas: '+R+').',false); return; }
+    GS.operators=nO; GS.parts=R; GS.data={};
+    for(var o=0;o<nO;o++){
+      GS.data[o]={};
+      for(var p=0;p<R;p++){
+        GS.data[o][p]=[];
+        for(var r2=0;r2<GS.reps;r2++) GS.data[o][p].push(vals[p][o*GS.reps+r2]);
+      }
+    }
+    renderGRRpanel();
+    grrPasteMsg('var','Datos cargados: '+R+' partes × '+nO+' operadores × '+GS.reps+' réplicas ('+(R*C)+' mediciones).',true);
+  }
 }
 
 function attDecision(chosenIdx){
