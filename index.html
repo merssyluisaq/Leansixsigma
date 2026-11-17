@@ -4970,7 +4970,8 @@ function plan5w2hExport() {
   <div class="ctrl-section" id="ctrl-amef">
 
     <div class="ctrl-info-box">
-      <strong>¿Qué es el AMEF?</strong> Análisis de Modo y Efecto de Falla (FMEA en inglés). Identifica proactivamente los modos de falla potenciales de un proceso, evalúa su riesgo con el <strong>NPR = Severidad × Ocurrencia × Detección</strong> (escala 1-10 cada uno) y prioriza acciones preventivas. NPR ≥ 125 requiere acción urgente.
+      <strong>¿Qué es el AMEF?</strong> Análisis de Modo y Efecto de Falla (FMEA en inglés). Identifica proactivamente los modos de falla potenciales de un proceso, evalúa su riesgo con el <strong>RPN = Severidad × Frecuencia × Detectabilidad</strong> (escala 1-10 cada uno) y prioriza acciones preventivas. RPN ≥ 125 requiere acción urgente.<br>
+      Después de implementar las acciones recomendadas, se <strong>vuelve a calificar</strong> cada modo de falla y se calcula el <strong>RPN final</strong> para verificar que el riesgo realmente bajó. Ojo: la severidad casi nunca cambia, salvo que la acción modifique el diseño del producto o proceso; lo normal es que bajen la frecuencia y la detectabilidad.
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
@@ -4985,36 +4986,46 @@ function plan5w2hExport() {
         1-3: Efecto menor<br>4-6: Efecto moderado<br>7-8: Alto — insatisfacción<br>9-10: Peligro / regulatorio
       </div>
       <div style="background:#FFF3E0;border-radius:8px;padding:10px;font-size:11px;">
-        <strong style="color:#E65100;">Ocurrencia (O)</strong><br>
+        <strong style="color:#E65100;">Frecuencia (F)</strong><br>
         1-2: Muy remota (&lt;1/1M)<br>3-4: Baja (1/20K)<br>5-6: Moderada (1/400)<br>7-10: Alta (&gt;1/100)
       </div>
       <div style="background:#E3F2FD;border-radius:8px;padding:10px;font-size:11px;">
-        <strong style="color:#1565C0;">Detección (D)</strong><br>
+        <strong style="color:#1565C0;">Detectabilidad (D)</strong><br>
         1-2: Siempre se detecta<br>3-4: Alta prob. de detección<br>5-6: Moderada<br>7-10: Improbable detección
       </div>
     </div>
 
     <div style="overflow-x:auto;border-radius:10px;border:1.5px solid #e6ddd2;">
-      <table id="ctrl-amef-table" style="border-collapse:collapse;width:100%;min-width:1200px;font-size:12px;">
+      <table id="ctrl-amef-table" style="border-collapse:collapse;width:100%;min-width:1750px;font-size:12px;">
         <thead>
           <tr style="background:#1a1a18;color:#fff;">
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);">#</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);">Paso / Función</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);">Modo de falla potencial</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);">Efecto de la falla</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);text-align:center;">S</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);">Causa potencial</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);text-align:center;">O</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);">Control actual</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);text-align:center;">D</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);text-align:center;background:#374151;">NPR</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);">Acción recomendada</th>
-            <th style="padding:9px 10px;border-right:1px solid rgba(255,255,255,.1);">Responsable</th>
-            <th style="padding:9px 10px;text-align:center;">⚡</th>
+            <th rowspan="2" style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;">#</th>
+            <th colspan="9" style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;border-bottom:1px solid rgba(255,255,255,.15);">EVALUACIÓN INICIAL</th>
+            <th colspan="2" style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;border-bottom:1px solid rgba(255,255,255,.15);background:#3b2f25;">ACCIONES</th>
+            <th colspan="5" style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;border-bottom:1px solid rgba(255,255,255,.15);background:#1f3d2f;">RESULTADO DESPUÉS DE LAS ACCIONES</th>
+            <th rowspan="2" style="padding:8px;text-align:center;">⚡</th>
+          </tr>
+          <tr style="background:#1a1a18;color:#fff;">
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;">Paso / Función</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;">Modo de falla potencial</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;">Efecto de la falla</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;">SEVERIDAD</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;">Causa potencial</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;">FRECUENCIA</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;">Control actual</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;">DETECTABILIDAD</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;background:#374151;">RPN</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;background:#3b2f25;">Acción recomendada</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;background:#3b2f25;">Responsable</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;background:#1f3d2f;">SEVERIDAD</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;background:#1f3d2f;">FRECUENCIA</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;background:#1f3d2f;">DETECTABILIDAD</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;background:#14532d;">RPN FINAL</th>
+            <th style="padding:8px 8px;border-right:1px solid rgba(255,255,255,.12);font-size:10.5px;letter-spacing:.3px;text-align:center;background:#1f3d2f;">% REDUCCIÓN</th>
           </tr>
         </thead>
         <tbody id="ctrl-amef-body">
-          <tr id="ctrl-amef-empty"><td colspan="13" style="padding:32px;text-align:center;color:#7a7068;">Sin modos de falla aún. Haz clic en <b>+ Agregar modo de falla</b>.</td></tr>
+          <tr id="ctrl-amef-empty"><td colspan="18" style="padding:32px;text-align:center;color:#7a7068;">Sin modos de falla aún. Haz clic en <b>+ Agregar modo de falla</b>.</td></tr>
         </tbody>
       </table>
     </div>
@@ -15395,9 +15406,9 @@ function ctrlInput(type, placeholder, dataAttrs, val, style) {
   var da = Object.keys(dataAttrs).map(function(k){ return 'data-'+k+'="'+dataAttrs[k]+'"'; }).join(' ');
   var s = style || 'width:100%;border:1px solid #e6ddd2;border-radius:5px;padding:5px 7px;font-size:11px;font-family:inherit;box-sizing:border-box;';
   if (type === 'textarea') {
-    return '<textarea rows="2" '+da+' oninput="ctrlFieldSet(this)" placeholder="'+placeholder+'" style="'+s+'resize:vertical;">'+val+'</textarea>';
+    return '<textarea rows="2" '+da+' oninput="ctrlFieldSet(this)" placeholder="'+placeholder+'" style="'+s+'resize:vertical;">'+String(val).replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</textarea>';
   }
-  return '<input type="text" '+da+' oninput="ctrlFieldSet(this)" value="'+val.replace(/"/g,'&quot;')+'" placeholder="'+placeholder+'" style="'+s+'">';
+  return '<input type="text" '+da+' oninput="ctrlFieldSet(this)" value="'+String(val).replace(/&/g,'&amp;').replace(/"/g,'&quot;')+'" placeholder="'+placeholder+'" style="'+s+'">';
 }
 
 // ── PLAN DE CONTROL ──────────────────────────────────────────────────
@@ -15444,7 +15455,7 @@ function ctrlFieldSet(el) {
   var fld = el.getAttribute('data-field');
   if (tbl==='pc') { var r=ctrlPCRows.find(function(x){return x.id===id;}); if(r) r[fld]=el.value; }
   if (tbl==='com') { var r=ctrlComRows.find(function(x){return x.id===id;}); if(r) r[fld]=el.value; }
-  if (tbl==='amef') { var r=ctrlAmefRows.find(function(x){return x.id===id;}); if(r){ r[fld]=el.value; ctrlAmefUpdateNPR(id); } }
+  if (tbl==='amef') { var r=ctrlAmefRows.find(function(x){return x.id===id;}); if(r){ r[fld]=el.value; if(['s','o','d','s2','o2','d2'].indexOf(fld)>=0) ctrlAmefUpdateNPR(id); } }
   if (tbl==='raci-task') { var t=ctrlRaciTasks.find(function(x){return x.id===id;}); if(t) t[fld]=el.value; }
   if (tbl==='raci-person') { var p=ctrlRaciPersons.find(function(x){return x.id===id;}); if(p) p[fld]=el.value; }
 }
@@ -15675,16 +15686,39 @@ var ctrlAmefRows = [];
 var ctrlAmefId = 0;
 
 function ctrlAmefAddRow() {
-  ctrlAmefRows.push({ id:++ctrlAmefId, paso:'', modo:'', efecto:'', s:5, causa:'', o:5, control:'', d:5, accion:'', responsable:'' });
+  ctrlAmefRows.push({ id:++ctrlAmefId, paso:'', modo:'', efecto:'', s:5, causa:'', o:5, control:'', d:5, accion:'', responsable:'', s2:'', o2:'', d2:'' });
   ctrlAmefRender();
 }
 
+// Calcula RPN inicial y final de una fila
+function ctrlAmefCalc(r) {
+  var s=+r.s||1, o=+r.o||1, d=+r.d||1;
+  r.npr = s*o*d;
+  var s2=+r.s2, o2=+r.o2, d2=+r.d2;
+  r.npr2 = (s2>0 && o2>0 && d2>0) ? s2*o2*d2 : null;
+  r.red = (r.npr2!==null && r.npr>0) ? Math.round((1 - r.npr2/r.npr)*100) : null;
+  return r;
+}
+function ctrlAmefColors(v) {
+  if (v===null || v===undefined) return { c:'#9ca3af', b:'#f3f4f6' };
+  return { c: v>=200?'#7f1d1d': v>=125?'#B23B17': v>=50?'#856404':'#2d6a4f',
+           b: v>=200?'#FEE2E2': v>=125?'#FBE3DE': v>=50?'#FFF3CD':'#E8F5E9' };
+}
+function ctrlAmefRedTxt(red) {
+  if (red===null || red===undefined) return { t:'—', c:'#9ca3af' };
+  return { t:(red>0?'↓ ':red<0?'↑ ':'')+Math.abs(red)+'%', c: red>=50?'#2d6a4f': red>0?'#856404':'#B23B17' };
+}
+
+// Actualiza solo las celdas calculadas (sin redibujar la tabla → no se pierde el foco)
 function ctrlAmefUpdateNPR(id) {
   var r = ctrlAmefRows.find(function(x){return x.id===id;});
   if (!r) return;
-  var s=+r.s||1, o=+r.o||1, d=+r.d||1;
-  r.npr = s*o*d;
-  ctrlAmefRender();
+  ctrlAmefCalc(r);
+  var c1=document.getElementById('amef-rpn-'+id), c2=document.getElementById('amef-rpn2-'+id), c3=document.getElementById('amef-red-'+id);
+  if (c1){ var k=ctrlAmefColors(r.npr); c1.textContent=r.npr; c1.style.color=k.c; c1.style.background=k.b; }
+  if (c2){ var k2=ctrlAmefColors(r.npr2); c2.textContent=(r.npr2===null?'—':r.npr2); c2.style.color=k2.c; c2.style.background=k2.b; }
+  if (c3){ var rt=ctrlAmefRedTxt(r.red); c3.textContent=rt.t; c3.style.color=rt.c; }
+  ctrlAmefSummary();
 }
 
 function ctrlAmefLoadFromAnalyze() {
@@ -15703,7 +15737,7 @@ function ctrlAmefLoadFromAnalyze() {
         efecto: 'Defecto "'+def+'" persiste',
         s:7, causa:c.text, o:6, control:c.action||'Control a definir',
         d:6, accion:'Implementar '+( typeof impMapperData !== 'undefined' ? (impMapperData.find(function(r){return r.text===c.text;})||{selectedTool:''}).selectedTool || 'herramienta Lean' : 'herramienta Lean'),
-        responsable:''
+        responsable:'', s2:'', o2:'', d2:''
       });
     });
   });
@@ -15715,34 +15749,39 @@ function ctrlAmefRender() {
   var tbody = document.getElementById('ctrl-amef-body');
   if (!tbody) return;
   if (!ctrlAmefRows.length) {
-    tbody.innerHTML = '<tr id="ctrl-amef-empty"><td colspan="13" style="padding:32px;text-align:center;color:#7a7068;">Sin modos de falla aún.</td></tr>';
+    tbody.innerHTML = '<tr id="ctrl-amef-empty"><td colspan="18" style="padding:32px;text-align:center;color:#7a7068;">Sin modos de falla aún. Haz clic en <b>+ Agregar modo de falla</b>.</td></tr>';
     document.getElementById('ctrl-amef-summary').style.display='none';
     return;
   }
+  var bd='border-right:1px solid #f0ebe4;';
   tbody.innerHTML = ctrlAmefRows.map(function(row, idx) {
-    var s=+row.s||1,o=+row.o||1,d=+row.d||1;
-    var npr=s*o*d;
-    row.npr=npr;
-    var nprColor = npr>=200?'#7f1d1d': npr>=125?'#B23B17': npr>=50?'#856404':'#2d6a4f';
-    var nprBg   = npr>=200?'#FEE2E2': npr>=125?'#FBE3DE': npr>=50?'#FFF3CD':'#E8F5E9';
+    ctrlAmefCalc(row);
+    var k1=ctrlAmefColors(row.npr), k2=ctrlAmefColors(row.npr2), rt=ctrlAmefRedTxt(row.red);
     var bg = idx%2===0?'#fff':'#faf6f0';
-    function numSel(field, val) {
-      var opts=''; for(var i=1;i<=10;i++) opts+='<option value="'+i+'"'+(+val===i?' selected':'')+'>'+i+'</option>';
-      return '<select data-table="amef" data-id="'+row.id+'" data-field="'+field+'" onchange="ctrlFieldSet(this);ctrlAmefUpdateNPR('+row.id+')" style="width:46px;border:1px solid #e6ddd2;border-radius:5px;padding:4px;font-size:12px;font-weight:700;">'+opts+'</select>';
+    function numSel(field, val, allowBlank) {
+      var opts = allowBlank ? '<option value=""'+(val===''||val===undefined||val===null?' selected':'')+'>—</option>' : '';
+      for(var i=1;i<=10;i++) opts+='<option value="'+i+'"'+(+val===i?' selected':'')+'>'+i+'</option>';
+      return '<select data-table="amef" data-id="'+row.id+'" data-field="'+field+'" onchange="ctrlFieldSet(this)" style="width:52px;border:1px solid #e6ddd2;border-radius:5px;padding:4px;font-size:12px;font-weight:700;background:#fff;">'+opts+'</select>';
     }
+    var post='background:rgba(45,106,79,.06);';
     return '<tr style="background:'+bg+';">'
-      +'<td style="padding:6px;text-align:center;font-weight:700;color:#7a7068;border-right:1px solid #f0ebe4;vertical-align:middle;">'+(idx+1)+'</td>'
-      +'<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f0ebe4;">'+ctrlInput('text','ej. Torneado',{table:'amef',id:row.id,field:'paso'},row.paso||'')+'</td>'
-      +'<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f0ebe4;">'+ctrlInput('textarea','ej. Diámetro fuera de tolerancia',{table:'amef',id:row.id,field:'modo'},row.modo||'')+'</td>'
-      +'<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f0ebe4;">'+ctrlInput('textarea','ej. Rechazo por cliente',{table:'amef',id:row.id,field:'efecto'},row.efecto||'')+'</td>'
-      +'<td style="padding:4px;text-align:center;border-right:1px solid #f0ebe4;vertical-align:middle;">'+numSel('s',row.s)+'</td>'
-      +'<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f0ebe4;">'+ctrlInput('textarea','ej. Desgaste de herramienta',{table:'amef',id:row.id,field:'causa'},row.causa||'')+'</td>'
-      +'<td style="padding:4px;text-align:center;border-right:1px solid #f0ebe4;vertical-align:middle;">'+numSel('o',row.o)+'</td>'
-      +'<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f0ebe4;">'+ctrlInput('text','ej. Carta X̄-R c/hora',{table:'amef',id:row.id,field:'control'},row.control||'')+'</td>'
-      +'<td style="padding:4px;text-align:center;border-right:1px solid #f0ebe4;vertical-align:middle;">'+numSel('d',row.d)+'</td>'
-      +'<td style="padding:6px;text-align:center;font-size:15px;font-weight:800;color:'+nprColor+';background:'+nprBg+';border-right:1px solid #f0ebe4;vertical-align:middle;min-width:50px;">'+npr+'</td>'
-      +'<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f0ebe4;">'+ctrlInput('textarea','ej. Calibrar cada 2 horas',{table:'amef',id:row.id,field:'accion'},row.accion||'')+'</td>'
-      +'<td style="padding:4px 6px;vertical-align:top;border-right:1px solid #f0ebe4;">'+ctrlInput('text','ej. Jefe de calidad',{table:'amef',id:row.id,field:'responsable'},row.responsable||'')+'</td>'
+      +'<td style="padding:6px;text-align:center;font-weight:700;color:#7a7068;'+bd+'vertical-align:middle;">'+(idx+1)+'</td>'
+      +'<td style="padding:4px 6px;vertical-align:top;'+bd+'min-width:110px;">'+ctrlInput('text','ej. Torneado',{table:'amef',id:row.id,field:'paso'},row.paso||'')+'</td>'
+      +'<td style="padding:4px 6px;vertical-align:top;'+bd+'min-width:150px;">'+ctrlInput('textarea','ej. Diámetro fuera de tolerancia',{table:'amef',id:row.id,field:'modo'},row.modo||'')+'</td>'
+      +'<td style="padding:4px 6px;vertical-align:top;'+bd+'min-width:140px;">'+ctrlInput('textarea','ej. Rechazo por cliente',{table:'amef',id:row.id,field:'efecto'},row.efecto||'')+'</td>'
+      +'<td style="padding:4px;text-align:center;'+bd+'vertical-align:middle;">'+numSel('s',row.s)+'</td>'
+      +'<td style="padding:4px 6px;vertical-align:top;'+bd+'min-width:140px;">'+ctrlInput('textarea','ej. Desgaste de herramienta',{table:'amef',id:row.id,field:'causa'},row.causa||'')+'</td>'
+      +'<td style="padding:4px;text-align:center;'+bd+'vertical-align:middle;">'+numSel('o',row.o)+'</td>'
+      +'<td style="padding:4px 6px;vertical-align:top;'+bd+'min-width:130px;">'+ctrlInput('textarea','ej. Inspección visual',{table:'amef',id:row.id,field:'control'},row.control||'')+'</td>'
+      +'<td style="padding:4px;text-align:center;'+bd+'vertical-align:middle;">'+numSel('d',row.d)+'</td>'
+      +'<td id="amef-rpn-'+row.id+'" style="padding:6px;text-align:center;font-size:15px;font-weight:800;color:'+k1.c+';background:'+k1.b+';'+bd+'vertical-align:middle;min-width:54px;">'+row.npr+'</td>'
+      +'<td style="padding:4px 6px;vertical-align:top;'+bd+'min-width:160px;">'+ctrlInput('textarea','ej. Carta X̄-R c/hora + poka-yoke',{table:'amef',id:row.id,field:'accion'},row.accion||'')+'</td>'
+      +'<td style="padding:4px 6px;vertical-align:top;'+bd+'min-width:110px;">'+ctrlInput('text','ej. Jefe de calidad',{table:'amef',id:row.id,field:'responsable'},row.responsable||'')+'</td>'
+      +'<td style="padding:4px;text-align:center;'+bd+post+'vertical-align:middle;">'+numSel('s2',row.s2,true)+'</td>'
+      +'<td style="padding:4px;text-align:center;'+bd+post+'vertical-align:middle;">'+numSel('o2',row.o2,true)+'</td>'
+      +'<td style="padding:4px;text-align:center;'+bd+post+'vertical-align:middle;">'+numSel('d2',row.d2,true)+'</td>'
+      +'<td id="amef-rpn2-'+row.id+'" style="padding:6px;text-align:center;font-size:15px;font-weight:800;color:'+k2.c+';background:'+k2.b+';'+bd+'vertical-align:middle;min-width:60px;">'+(row.npr2===null?'—':row.npr2)+'</td>'
+      +'<td id="amef-red-'+row.id+'" style="padding:6px;text-align:center;font-size:13px;font-weight:800;color:'+rt.c+';'+bd+post+'vertical-align:middle;min-width:64px;">'+rt.t+'</td>'
       +'<td style="padding:4px;text-align:center;vertical-align:middle;"><button onclick="ctrlAmefDel('+row.id+')" style="background:#FBE3DE;color:#B23B17;border:none;border-radius:5px;padding:4px 7px;cursor:pointer;font-size:12px;">🗑</button></td>'
       +'</tr>';
   }).join('');
@@ -15757,54 +15796,75 @@ function ctrlAmefDel(id) {
 function ctrlAmefSummary() {
   var el=document.getElementById('ctrl-amef-summary');
   if(!el||!ctrlAmefRows.length){if(el)el.style.display='none';return;}
+  ctrlAmefRows.forEach(ctrlAmefCalc);
   var high=ctrlAmefRows.filter(function(r){return r.npr>=125;}).length;
   var med=ctrlAmefRows.filter(function(r){return r.npr>=50&&r.npr<125;}).length;
   var low=ctrlAmefRows.filter(function(r){return r.npr<50;}).length;
   var maxNPR=Math.max.apply(null,ctrlAmefRows.map(function(r){return r.npr||0;}));
+  var ev=ctrlAmefRows.filter(function(r){return r.npr2!==null;});
+  var sum1=ev.reduce(function(a,r){return a+r.npr;},0), sum2=ev.reduce(function(a,r){return a+r.npr2;},0);
+  var redTot = ev.length && sum1>0 ? Math.round((1-sum2/sum1)*100) : null;
+  var max2 = ev.length ? Math.max.apply(null,ev.map(function(r){return r.npr2;})) : null;
+  var high2 = ev.filter(function(r){return r.npr2>=125;}).length;
+  var pend = ctrlAmefRows.length-ev.length;
+  function tile(bg,bc,col,lbl,val){return '<div style="background:'+bg+';border-radius:8px;padding:10px;text-align:center;border-left:4px solid '+bc+';"><div style="font-size:10px;font-weight:700;color:'+col+';text-transform:uppercase;">'+lbl+'</div><div style="font-size:26px;font-weight:800;color:'+col+';">'+val+'</div></div>';}
   el.style.display='block';
-  el.innerHTML='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'
-    +'<div style="background:#FEE2E2;border-radius:8px;padding:10px;text-align:center;border-left:4px solid #7f1d1d;">'
-    +'<div style="font-size:10px;font-weight:700;color:#7f1d1d;text-transform:uppercase;">NPR ≥ 125 (CRÍTICO)</div>'
-    +'<div style="font-size:26px;font-weight:800;color:#7f1d1d;">'+high+'</div></div>'
-    +'<div style="background:#FFF3CD;border-radius:8px;padding:10px;text-align:center;border-left:4px solid #856404;">'
-    +'<div style="font-size:10px;font-weight:700;color:#856404;text-transform:uppercase;">NPR 50-124 (MEDIO)</div>'
-    +'<div style="font-size:26px;font-weight:800;color:#856404;">'+med+'</div></div>'
-    +'<div style="background:#E8F5E9;border-radius:8px;padding:10px;text-align:center;border-left:4px solid #2d6a4f;">'
-    +'<div style="font-size:10px;font-weight:700;color:#2d6a4f;text-transform:uppercase;">NPR &lt; 50 (BAJO)</div>'
-    +'<div style="font-size:26px;font-weight:800;color:#2d6a4f;">'+low+'</div></div>'
-    +'<div style="background:#f8f6f0;border-radius:8px;padding:10px;text-align:center;border-left:4px solid #1a1a18;">'
-    +'<div style="font-size:10px;font-weight:700;color:#1a1a18;text-transform:uppercase;">NPR Máximo</div>'
-    +'<div style="font-size:26px;font-weight:800;color:#1a1a18;">'+maxNPR+'</div></div>'
+  el.innerHTML='<div style="font-size:11px;font-weight:700;color:#7a7068;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Evaluación inicial</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'
+    +tile('#FEE2E2','#7f1d1d','#7f1d1d','RPN ≥ 125 (CRÍTICO)',high)
+    +tile('#FFF3CD','#856404','#856404','RPN 50-124 (MEDIO)',med)
+    +tile('#E8F5E9','#2d6a4f','#2d6a4f','RPN &lt; 50 (BAJO)',low)
+    +tile('#f8f6f0','#1a1a18','#1a1a18','RPN máximo',maxNPR)
     +'</div>'
-    +(high?'<div style="margin-top:10px;background:#FBE3DE;border:1.5px solid #B23B17;border-radius:8px;padding:10px 14px;font-size:12px;color:#B23B17;">⚠️ Hay '+high+' modo(s) de falla con NPR crítico (≥125). Se requieren acciones correctivas inmediatas.</div>':'');
+    +'<div style="font-size:11px;font-weight:700;color:#2d6a4f;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;">Después de las acciones</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">'
+    +tile('#E8F5E9','#2d6a4f','#2d6a4f','Modos re-evaluados',ev.length+' / '+ctrlAmefRows.length)
+    +tile('#f8f6f0','#1a1a18','#1a1a18','RPN final máximo',(max2===null?'—':max2))
+    +tile(high2?'#FEE2E2':'#E8F5E9',high2?'#7f1d1d':'#2d6a4f',high2?'#7f1d1d':'#2d6a4f','Críticos residuales (≥125)',(ev.length?high2:'—'))
+    +tile('#E3F2FD','#1565C0','#1565C0','Reducción total del RPN',(redTot===null?'—':redTot+'%'))
+    +'</div>'
+    +(high?'<div style="margin-top:10px;background:#FBE3DE;border:1.5px solid #B23B17;border-radius:8px;padding:10px 14px;font-size:12px;color:#B23B17;">⚠️ Hay '+high+' modo(s) de falla con RPN inicial crítico (≥125). Se requieren acciones correctivas inmediatas.</div>':'')
+    +(pend?'<div style="margin-top:8px;background:#FFF8E1;border:1.5px solid #E0B252;border-radius:8px;padding:10px 14px;font-size:12px;color:#7a5a00;">📝 Falta re-calificar '+pend+' modo(s) de falla. Completa Severidad, Frecuencia y Detectabilidad después de las acciones para obtener el RPN final.</div>':'')
+    +(high2?'<div style="margin-top:8px;background:#FBE3DE;border:1.5px solid #B23B17;border-radius:8px;padding:10px 14px;font-size:12px;color:#B23B17;">⚠️ '+high2+' modo(s) siguen con RPN final ≥125: la acción no fue suficiente, hay que replantearla.</div>':'');
 }
 
 function ctrlAmefExport() {
-  var thS='background:#1a1a18;color:#fff;padding:8px 10px;font-size:11px;border:1px solid #333;text-align:center;white-space:nowrap;';
+  var thS='background:#1a1a18;color:#fff;padding:7px 8px;font-size:10px;border:1px solid #333;text-align:center;';
   var tdS='border:1px solid #e6ddd2;padding:6px 8px;font-size:11px;vertical-align:top;';
-  var cols=['#','Paso','Modo de falla','Efecto','S','Causa','O','Control actual','D','NPR','Acción','Responsable'];
-  var thead='<tr>'+cols.map(function(c){return '<th style="'+thS+(c==='NPR'?'background:#374151;':'')+'">'+c+'</th>';}).join('')+'</tr>';
+  var g='<tr>'
+    +'<th rowspan="2" style="'+thS+'">#</th>'
+    +'<th colspan="9" style="'+thS+'">EVALUACIÓN INICIAL</th>'
+    +'<th colspan="2" style="'+thS+'background:#3b2f25;">ACCIONES</th>'
+    +'<th colspan="5" style="'+thS+'background:#1f3d2f;">RESULTADO DESPUÉS DE LAS ACCIONES</th></tr>';
+  var cols=[['Paso',''],['Modo de falla',''],['Efecto',''],['SEVERIDAD',''],['Causa',''],['FRECUENCIA',''],['Control actual',''],['DETECTABILIDAD',''],['RPN','background:#374151;'],
+            ['Acción recomendada','background:#3b2f25;'],['Responsable','background:#3b2f25;'],
+            ['SEVERIDAD','background:#1f3d2f;'],['FRECUENCIA','background:#1f3d2f;'],['DETECTABILIDAD','background:#1f3d2f;'],['RPN FINAL','background:#14532d;'],['% REDUCCIÓN','background:#1f3d2f;']];
+  var thead=g+'<tr>'+cols.map(function(c){return '<th style="'+thS+c[1]+'">'+c[0]+'</th>';}).join('')+'</tr>';
+  function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;');}
   var tbody=ctrlAmefRows.map(function(r,i){
-    var npr=r.npr||(+r.s||1)*(+r.o||1)*(+r.d||1);
-    var nc=npr>=200?'#7f1d1d':npr>=125?'#B23B17':npr>=50?'#856404':'#2d6a4f';
-    var nb=npr>=200?'#FEE2E2':npr>=125?'#FBE3DE':npr>=50?'#FFF3CD':'#E8F5E9';
+    ctrlAmefCalc(r);
+    var k1=ctrlAmefColors(r.npr), k2=ctrlAmefColors(r.npr2), rt=ctrlAmefRedTxt(r.red);
+    var num=function(v){return '<td style="'+tdS+'text-align:center;font-weight:700;">'+(v===''||v==null?'—':esc(v))+'</td>';};
     return '<tr style="background:'+(i%2===0?'#fff':'#faf6f0')+'">'
       +'<td style="'+tdS+'text-align:center;font-weight:700;">'+(i+1)+'</td>'
-      +['paso','modo','efecto'].map(function(f){return '<td style="'+tdS+'">'+(r[f]||'')+'</td>';}).join('')
-      +'<td style="'+tdS+'text-align:center;font-weight:700;">'+(r.s||'')+'</td>'
-      +'<td style="'+tdS+'">'+(r.causa||'')+'</td>'
-      +'<td style="'+tdS+'text-align:center;font-weight:700;">'+(r.o||'')+'</td>'
-      +'<td style="'+tdS+'">'+(r.control||'')+'</td>'
-      +'<td style="'+tdS+'text-align:center;font-weight:700;">'+(r.d||'')+'</td>'
-      +'<td style="'+tdS+'text-align:center;font-size:14px;font-weight:800;color:'+nc+';background:'+nb+';">'+npr+'</td>'
-      +['accion','responsable'].map(function(f){return '<td style="'+tdS+'">'+(r[f]||'')+'</td>';}).join('')
+      +['paso','modo','efecto'].map(function(f){return '<td style="'+tdS+'">'+esc(r[f])+'</td>';}).join('')
+      +num(r.s)
+      +'<td style="'+tdS+'">'+esc(r.causa)+'</td>'
+      +num(r.o)
+      +'<td style="'+tdS+'">'+esc(r.control)+'</td>'
+      +num(r.d)
+      +'<td style="'+tdS+'text-align:center;font-size:14px;font-weight:800;color:'+k1.c+';background:'+k1.b+';">'+r.npr+'</td>'
+      +['accion','responsable'].map(function(f){return '<td style="'+tdS+'">'+esc(r[f])+'</td>';}).join('')
+      +num(r.s2)+num(r.o2)+num(r.d2)
+      +'<td style="'+tdS+'text-align:center;font-size:14px;font-weight:800;color:'+k2.c+';background:'+k2.b+';">'+(r.npr2===null?'—':r.npr2)+'</td>'
+      +'<td style="'+tdS+'text-align:center;font-weight:800;color:'+rt.c+';">'+rt.t+'</td>'
       +'</tr>';
   }).join('');
   var html='<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Matriz AMEF</title>'
-    +'<style>body{font-family:Arial,sans-serif;max-width:1200px;margin:30px auto;}table{border-collapse:collapse;width:100%;}</style></head><body>'
+    +'<style>body{font-family:Arial,sans-serif;max-width:1500px;margin:30px auto;}table{border-collapse:collapse;width:100%;}@page{size:A4 landscape;margin:10mm;}</style></head><body>'
     +'<div style="background:#1a1a18;color:#fff;padding:16px 24px;border-radius:8px;margin-bottom:16px;">'
     +'<h1 style="margin:0 0 4px;font-size:20px;">⚠️ Matriz AMEF</h1>'
-    +'<div style="font-size:12px;opacity:.8;">NPR = Severidad × Ocurrencia × Detección | Crítico ≥ 125</div></div>'
+    +'<div style="font-size:12px;opacity:.8;">RPN = Severidad × Frecuencia × Detectabilidad | Crítico ≥ 125</div></div>'
     +'<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'
     +'<p style="margin-top:20px;font-size:10px;color:#9ca3af;text-align:center;">Simulador DMAIC · Universidad de Lima</p></body></html>';
   exportModal('📄 Exportar', html);
@@ -16591,13 +16651,13 @@ function coachCheckControl() {
     var critWithAction = amefRows.filter(function(r){ return (r.npr||0) >= 125 && (r.accion||'').trim().length > 5; }).length;
     if (criticals > 0 && critWithAction < criticals) {
       checks.push({ type:'error', label: criticals + ' modo(s) de falla CRÍTICO(S) sin acción correctiva',
-        detail:'NPR ≥ 125 requiere acción inmediata.',
-        why:'Un NPR alto sin acción es un riesgo que ya identificaste pero decidiste ignorar — eso es peor que no haberlo detectado.',
-        action:'Completa la columna "Acción correctiva" para todos los NPR ≥ 125.' });
+        detail:'RPN ≥ 125 requiere acción inmediata.',
+        why:'Un RPN alto sin acción es un riesgo que ya identificaste pero decidiste ignorar — eso es peor que no haberlo detectado.',
+        action:'Completa la columna "Acción recomendada" para todos los RPN ≥ 125.' });
     } else if (criticals > 0) {
-      checks.push({ type:'warn', label: criticals + ' modo(s) crítico(s) con acción definida — verifica el NPR residual',
+      checks.push({ type:'warn', label: criticals + ' modo(s) crítico(s) con acción definida — verifica el RPN final',
         why:'Definir la acción no basta — hay que confirmar que efectivamente bajó el riesgo, no solo que "se hizo algo".',
-        action:'Asegúrate de que el NPR residual bajó a menos de 50.' });
+        action:'Asegúrate de que el RPN final (después de las acciones) bajó a menos de 50.' });
     } else {
       checks.push({ type:'ok', label:'AMEF completa', detail: amefRows.length + ' modos de falla analizados. Sin críticos.' });
     }
@@ -16605,9 +16665,9 @@ function coachCheckControl() {
     // Check residual NPR
     var residualHigh = amefRows.filter(function(r){ return (r.npr2||0) >= 125; }).length;
     if (residualHigh > 0) {
-      checks.push({ type:'warn', label: residualHigh + ' modo(s) con NPR residual aún elevado',
-        why:'Si el NPR residual sigue alto, la acción correctiva no fue suficiente — el riesgo real sigue ahí aunque el papel diga que se atendió.',
-        action:'Revisa las acciones correctivas — el NPR residual debe bajar a <50.' });
+      checks.push({ type:'warn', label: residualHigh + ' modo(s) con RPN final aún elevado',
+        why:'Si el RPN final sigue alto, la acción correctiva no fue suficiente — el riesgo real sigue ahí aunque el papel diga que se atendió.',
+        action:'Revisa las acciones correctivas — el RPN final debe bajar a <50.' });
     }
   }
 
