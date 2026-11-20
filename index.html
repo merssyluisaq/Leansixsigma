@@ -10088,7 +10088,7 @@ function analyzeGoTo(idx, btn) {
 // Zero backticks. data-* attributes for all event handlers.
 // ═══════════════════════════════════════════════════════════════════════
 var GS = { operators:3, parts:5, reps:2, usl:12, lsl:8, nominal:10, alpha:0.05, data:{}, subMode:'var' };
-var GKS = { operators:2, parts:20, categories:['Conforme','No conforme'], data:{} };
+var GKS = { operators:2, parts:20, trials:2, categories:['Conforme','No conforme'], data:{} };
 
 function grrLoadAttSample(){
   grrInitAttSample();
@@ -10126,11 +10126,144 @@ function grrInitSampleData() {
   }
 }
 function grrInitAttSample() {
-  GKS.data = {
-    'Referencia':  [1,1,0,0,1,0,1,1,0,1,1,0,1,0,0,1,1,0,1,0],
-    'Operario 1': [1,1,0,0,1,0,1,0,0,1,1,0,1,0,0,1,1,0,1,0],
-    'Operario 2': [1,1,0,1,1,0,1,1,0,1,1,0,1,0,0,1,0,0,1,0]
+  // Ejemplo de 20 partes. Cada operario repite la evaluación GKS.trials veces.
+  var ref=[1,1,0,0,1,0,1,1,0,1,1,0,1,0,0,1,1,0,1,0];
+  var base={
+    'Operario 1':[1,1,0,0,1,0,1,0,0,1,1,0,1,0,0,1,1,0,1,0],
+    'Operario 2':[1,1,0,1,1,0,1,1,0,1,1,0,1,0,0,1,0,0,1,0]
   };
+  GKS.parts=20;
+  if(!GKS.trials||GKS.trials<1) GKS.trials=1;
+  GKS.data={'Referencia':ref.slice()};
+  var seed=7;
+  function rnd(){ seed=(seed*1103515245+12345)%2147483648; return seed/2147483648; }
+  for(var o=0;o<GKS.operators;o++){
+    var op='Operario '+(o+1);
+    var errRate=0.05+0.04*o; // cada operario un poco menos consistente que el anterior
+    var t1=base[op]?base[op].slice():ref.map(function(v){return rnd()<errRate?1-v:v;});
+    GKS.data[op]=t1;
+    for(var t=1;t<GKS.trials;t++){
+      // la repetición coincide casi siempre con su propio primer ensayo (repetibilidad)
+      GKS.data[attKey(op,t)]=t1.map(function(v,i){ return rnd()<errRate?1-v:v; });
+    }
+  }
+}
+
+// ── Helpers de ensayos (repeticiones) ─────────────────────────────────────
+function attKey(op,t){ return t===0 ? op : op+' E'+(t+1); }
+function attTrials(){ var t=+GKS.trials||1; return Math.max(1,Math.min(5,t)); }
+function attOps(){ return Array.from({length:GKS.operators},function(_,i){return 'Operario '+(i+1);}); }
+function attTrialData(op,t){
+  var d=GKS.data[attKey(op,t)]||[], nP=GKS.parts, out=[];
+  for(var i=0;i<nP;i++) out.push(d[i]!==undefined&&d[i]!==null&&!isNaN(d[i])?+d[i]:0);
+  return out;
+}
+function attRef(){ var d=GKS.data['Referencia']||[], out=[]; for(var i=0;i<GKS.parts;i++) out.push(d[i]!==undefined?+d[i]:0); return out; }
+// Serie concatenada de todos los ensayos de un operario (alineada ensayo a ensayo)
+function attSeries(op){ var T=attTrials(),out=[]; for(var t=0;t<T;t++) out=out.concat(attTrialData(op,t)); return out; }
+function attRefRep(){ var T=attTrials(),r=attRef(),out=[]; for(var t=0;t<T;t++) out=out.concat(r); return out; }
+
+// Kappa de Fleiss: ratings = [parte][calificación]
+function fleissKappa(ratings,nCats){
+  var N=ratings.length; if(!N) return {kappa:1};
+  var m=ratings[0].length; if(m<2) return {kappa:1};
+  var pj=Array(nCats).fill(0), Pbar=0;
+  ratings.forEach(function(r){
+    var cnt=Array(nCats).fill(0);
+    r.forEach(function(v){ if(v>=0&&v<nCats) cnt[v]++; });
+    var sq=0; cnt.forEach(function(c,j){ sq+=c*c; pj[j]+=c; });
+    Pbar+=(sq-m)/(m*(m-1));
+  });
+  Pbar/=N;
+  var Pe=0; pj.forEach(function(c){ var p=c/(N*m); Pe+=p*p; });
+  if(1-Pe<1e-12) return {kappa:Pbar>=1-1e-12?1:0};
+  return {kappa:(Pbar-Pe)/(1-Pe)};
+}
+
+// IC 95% exacto (Clopper-Pearson), como Minitab
+function attExactCI(x,n){
+  if(!n) return {lo:0,hi:0};
+  function lnG(z){var c=[76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,0.1208650973866179e-2,-0.5395239384953e-5];var y=z,t=z+5.5;t-=(z+0.5)*Math.log(t);var ser=1.000000000190015;for(var j=0;j<6;j++)ser+=c[j]/++y;return -t+Math.log(2.5066282746310005*ser/z);}
+  function lC(k){return lnG(n+1)-lnG(k+1)-lnG(n-k+1);}
+  function cdf(k,p){ if(k<0)return 0; if(k>=n)return 1; var s=0; for(var i=0;i<=k;i++){ s+=Math.exp(lC(i)+(i?i*Math.log(p):0)+(n-i?(n-i)*Math.log(1-p):0)); } return s; }
+  function bis(f){ var a=0,b=1; for(var i=0;i<60;i++){ var mid=(a+b)/2; if(f(mid)) b=mid; else a=mid; } return (a+b)/2; }
+  var lo = x===0 ? 0 : bis(function(p){ return 1-cdf(x-1,p) >= 0.025; });
+  var hi = x===n ? 1 : bis(function(p){ return cdf(x,p) <= 0.025; });
+  return {lo:lo*100,hi:hi*100};
+}
+
+// Estadísticas de acuerdo de atributos (estructura de Minitab / AIAG)
+function attStats(){
+  var ops=attOps(), T=attTrials(), nP=GKS.parts, nCats=GKS.categories.length, ref=attRef();
+  var tr={}; ops.forEach(function(op){ tr[op]=[]; for(var t=0;t<T;t++) tr[op].push(attTrialData(op,t)); });
+  function pack(agree,n,kappa,extra){ var ci=attExactCI(agree,n); var o={agree:agree,n:n,pct:n?agree/n*100:0,lo:ci.lo,hi:ci.hi,kappa:kappa}; for(var k in extra) o[k]=extra[k]; return o; }
+  var within=null;
+  if(T>=2){
+    within=ops.map(function(op){
+      var ag=0, rat=[];
+      for(var p=0;p<nP;p++){
+        var vals=tr[op].map(function(a){return a[p];});
+        if(vals.every(function(v){return v===vals[0];})) ag++;
+        rat.push(vals);
+      }
+      return pack(ag,nP,fleissKappa(rat,nCats).kappa,{op:op});
+    });
+  }
+  var vsStd=ops.map(function(op){
+    var ag=0;
+    for(var p=0;p<nP;p++){ if(tr[op].every(function(a){return a[p]===ref[p];})) ag++; }
+    return pack(ag,nP,calcKappa(attRefRep(),attSeries(op),nCats).kappa,{op:op});
+  });
+  var agB=0, agS=0, ratB=[], allSer=[], allRef=[];
+  for(var p=0;p<nP;p++){
+    var vals=[]; ops.forEach(function(op){ tr[op].forEach(function(a){ vals.push(a[p]); }); });
+    if(vals.every(function(v){return v===vals[0];})){ agB++; if(vals[0]===ref[p]) agS++; }
+    ratB.push(vals);
+  }
+  ops.forEach(function(op){ allSer=allSer.concat(attSeries(op)); allRef=allRef.concat(attRefRep()); });
+  return { ops:ops, T:T, nP:nP, within:within, vsStd:vsStd,
+    between: pack(agB,nP,fleissKappa(ratB,nCats).kappa,{}),
+    allStd:  pack(agS,nP,calcKappa(allRef,allSer,nCats).kappa,{}) };
+}
+
+function attAgreementTablesHTML(st){
+  var th='background:#1a1a18;color:#fff;padding:7px 10px;font-size:11px;';
+  var td='padding:7px 10px;border-bottom:1px solid #eef0f3;';
+  function pctCell(o){ var c=o.pct>=90?'#0F6E56':o.pct>=70?'#856404':'#B23B17'; return '<td style="'+td+'text-align:center;font-weight:700;color:'+c+';">'+o.pct.toFixed(1)+'%</td>'; }
+  function row(lbl,o){
+    return '<tr><td style="'+td+'font-weight:600;">'+lbl+'</td>'
+      +'<td style="'+td+'text-align:center;">'+o.n+'</td>'
+      +'<td style="'+td+'text-align:center;">'+o.agree+'</td>'
+      +pctCell(o)
+      +'<td style="'+td+'text-align:center;font-family:monospace;font-size:11px;">('+o.lo.toFixed(1)+'; '+o.hi.toFixed(1)+')</td>'
+      +'<td style="'+td+'text-align:center;font-family:monospace;">'+o.kappa.toFixed(3)+'</td>'
+      +'<td style="'+td+'"><span style="background:'+kBg(o.kappa)+';color:'+kClr(o.kappa)+';border-radius:4px;padding:2px 8px;font-size:11px;font-weight:700;">'+kLbl(o.kappa)+'</span></td></tr>';
+  }
+  function sec(title,desc,kLabel,clr){
+    return '<tr><td colspan="7" style="background:'+clr+';padding:8px 10px;font-size:12px;font-weight:800;color:#1a1a18;">'+title
+      +'<div style="font-size:11px;font-weight:400;color:#374151;margin-top:2px;">'+desc+' &nbsp;·&nbsp; <i>'+kLabel+'</i></div></td></tr>';
+  }
+  var h='<div style="background:#fff;border:1.5px solid #185FA5;border-radius:10px;padding:14px;margin-bottom:16px;overflow-x:auto;">'
+    +'<div style="font-size:13px;font-weight:800;margin-bottom:4px;">&#x1F50E; Análisis de concordancia de atributos (formato Minitab / AIAG)</div>'
+    +'<div style="font-size:11.5px;color:#5a5a54;margin-bottom:10px;">'+st.nP+' partes &times; '+st.ops.length+' operarios &times; '+st.T+' ensayo'+(st.T>1?'s':'')+' por operario. '
+    +(st.T>1?'Una parte cuenta como "coincidencia" solo si <b>todos</b> los ensayos coinciden.':'Con 1 solo ensayo no se puede evaluar la repetibilidad: sube <b>Ensayos por operario</b> a 2 o más.')+'</div>'
+    +'<table style="border-collapse:collapse;font-size:12px;width:100%;min-width:640px;"><thead><tr>'
+    +'<th style="'+th+'text-align:left;">Evaluador</th><th style="'+th+'">N.&ordm; inspeccionadas</th><th style="'+th+'">N.&ordm; coincidencias</th><th style="'+th+'">% Acuerdo</th><th style="'+th+'">IC 95%</th><th style="'+th+'">&kappa;</th><th style="'+th+'text-align:left;">Veredicto</th>'
+    +'</tr></thead><tbody>';
+  if(st.within){
+    h+=sec('1 · Dentro del evaluador — REPETIBILIDAD','¿El operario se califica igual a sí mismo en todos sus ensayos?','&kappa; de Fleiss entre ensayos','#E6F1FB');
+    st.within.forEach(function(o){ h+=row(o.op,o); });
+  }
+  h+=sec((st.within?'2':'1')+' · Cada evaluador vs. el estándar — EXACTITUD','¿Todos los ensayos del operario coinciden con la Referencia?','&kappa; de Cohen (todos los ensayos vs. Referencia)','#E1F5EE');
+  st.vsStd.forEach(function(o){ h+=row(o.op,o); });
+  h+=sec((st.within?'3':'2')+' · Entre evaluadores — REPRODUCIBILIDAD','¿Todos los operarios, en todos sus ensayos, califican igual la parte?','&kappa; de Fleiss','#FFF3CD');
+  h+=row('Todos los operarios',st.between);
+  h+=sec((st.within?'4':'3')+' · Todos los evaluadores vs. el estándar — SISTEMA DE MEDICIÓN','¿Todas las calificaciones de la parte coinciden con la Referencia?','&kappa; de Cohen (todas las calificaciones vs. Referencia)','#FBE3DE');
+  h+=row('Sistema completo',st.allStd);
+  h+='</tbody></table>'
+    +'<div style="font-size:11px;color:#5a5a54;margin-top:8px;line-height:1.5;">Criterio usual: % de acuerdo &ge; 90% y &kappa; &ge; 0.90 excelente; &kappa; &ge; 0.70 aceptable. Si la <b>repetibilidad</b> falla, el problema es el operario consigo mismo (criterio poco claro, cansancio, iluminación); si falla la <b>reproducibilidad</b>, los operarios aplican criterios distintos entre sí.</div>'
+    +'</div>';
+  return h;
 }
 
 // ── ANOVA GRR ───────────────────────────────────────────────────────────
@@ -10856,40 +10989,60 @@ function grrRebuildAtt(){
 
 function buildGRRattHTML(){
   if(!GKS.data['Referencia'])grrInitAttSample();
-  var ops=Array.from({length:GKS.operators},function(_,i){return 'Operario '+(i+1);});
-  var allOps=['Referencia'].concat(ops);
+  var ops=attOps(), T=attTrials();
   var cats=GKS.categories;
   var nP=GKS.parts;
-  var thOps='<th style="background:#1a1a18;color:#fff;padding:7px 10px;white-space:nowrap;">Parte</th>';
-  for(var ti=0;ti<allOps.length;ti++){
-    thOps+='<th style="background:'+(allOps[ti]==='Ref'?'#B23B17':'#185FA5')+';color:#fff;padding:7px 10px;white-space:nowrap;">'+allOps[ti]+'</th>';
+  var thS='color:#fff;padding:7px 10px;white-space:nowrap;text-align:center;';
+  var head1='<tr><th rowspan="'+(T>1?2:1)+'" style="background:#1a1a18;'+thS+'">Parte</th>'
+    +'<th rowspan="'+(T>1?2:1)+'" style="background:#B23B17;'+thS+'">Referencia</th>';
+  var head2='';
+  var pal=['#185FA5','#0F6E56','#6d28d9','#b45309','#0e7490','#9d174d','#4d7c0f','#334155'];
+  ops.forEach(function(op,oi){
+    if(T>1){
+      head1+='<th colspan="'+T+'" style="background:'+pal[oi%pal.length]+';'+thS+'border-left:2px solid #fff;">'+op+'</th>';
+      for(var t=0;t<T;t++) head2+='<th style="background:'+pal[oi%pal.length]+';'+thS+'font-size:10.5px;opacity:.9;'+(t===0?'border-left:2px solid #fff;':'')+'">Ensayo '+(t+1)+'</th>';
+    } else {
+      head1+='<th style="background:'+pal[oi%pal.length]+';'+thS+'">'+op+'</th>';
+    }
+  });
+  head1+='</tr>'; if(T>1) head1+='<tr>'+head2+'</tr>';
+  function selCell(key,p,val,extra){
+    var opts='';
+    for(var ci=0;ci<cats.length;ci++){opts+='<option value="'+ci+'"'+(val===ci?' selected':'')+'>'+cats[ci]+'</option>';}
+    return '<td style="padding:3px;border-bottom:1px solid #e2e8f0;'+(extra||'')+'"><select'
+      +' data-att-op="'+key+'" data-att-p="'+p+'"'
+      +' style="border:1px solid #dde3ec;border-radius:4px;padding:4px 5px;font-size:11px;background:#fff;cursor:pointer;"'
+      +' oninput="grrAttSetDirect(this);grrAttUpdate()">'+opts+'</select></td>';
   }
   var rows='';
   for(var p=0;p<nP;p++){
     rows+='<tr><td style="font-weight:600;color:#185FA5;text-align:center;padding:5px 8px;font-size:11px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">P'+(p+1)+'</td>';
-    for(var oi=0;oi<allOps.length;oi++){
-      var op=allOps[oi];
-      var val=(GKS.data[op]&&GKS.data[op][p]!==undefined)?GKS.data[op][p]:0;
-      var opts='';
-      for(var ci=0;ci<cats.length;ci++){opts+='<option value="'+ci+'"'+(val===ci?' selected':'')+'>'+cats[ci]+'</option>';}
-      rows+='<td style="padding:3px;border-bottom:1px solid #e2e8f0;"><select'
-        +' data-att-op="'+op+'" data-att-p="'+p+'"'
-        +' style="border:1px solid #dde3ec;border-radius:4px;padding:4px 5px;font-size:11px;background:#fff;cursor:pointer;"'
-        +' oninput="grrAttSetDirect(this);grrAttUpdate()">'+opts+'</select></td>';
-    }
+    var rv=(GKS.data['Referencia']&&GKS.data['Referencia'][p]!==undefined)?GKS.data['Referencia'][p]:0;
+    rows+=selCell('Referencia',p,rv,'background:#fdf3f0;');
+    ops.forEach(function(op){
+      for(var t=0;t<T;t++){
+        var key=attKey(op,t);
+        var val=(GKS.data[key]&&GKS.data[key][p]!==undefined)?GKS.data[key][p]:0;
+        rows+=selCell(key,p,val,t===0&&T>1?'border-left:2px solid #e2e8f0;':'');
+      }
+    });
     rows+='</tr>';
   }
-  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:18px;">'
-    +gCfg('OPERARIOS','number',GKS.operators,2,8,1,'GKS.operators=+this.value;grrRebuildAtt()',true)
-    +gCfg('PARTES','number',GKS.parts,5,100,1,'GKS.parts=+this.value;grrRebuildAtt()',true)
+  return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:12px;">'
+    +gCfg('OPERARIOS','number',GKS.operators,2,8,1,'GKS.operators=Math.max(2,Math.min(8,+this.value||2));grrRebuildAtt()',true)
+    +gCfg('PARTES','number',GKS.parts,5,100,1,'GKS.parts=Math.max(5,Math.min(100,+this.value||5));grrRebuildAtt()',true)
+    +gCfg('ENSAYOS POR OPERARIO','number',T,1,5,1,'GKS.trials=Math.max(1,Math.min(5,+this.value||1));grrRebuildAtt()',true)
     +'<div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;display:flex;align-items:center;">'
     +'<button onclick="grrLoadAttSample()"'
     +' style="width:100%;background:#185FA5;color:#fff;border:none;border-radius:6px;padding:9px;font-size:12px;font-weight:600;cursor:pointer;">&#x1F4CB; Cargar ejemplo</button>'
     +'</div></div>'
+    +'<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 12px;margin-bottom:18px;font-size:12px;color:#374151;line-height:1.55;">'
+    +'<b>Ensayos por operario:</b> cuántas veces cada operario evalúa la <b>misma pieza</b> (de 1 a 5). Con 2 o más ensayos se mide la <b>repetibilidad</b> (que el operario coincida consigo mismo). '
+    +'Buena práctica: presentar las piezas en <b>orden aleatorio</b> en cada ensayo y sin que el operario vea sus calificaciones anteriores.</div>'
     +grrPasteBox('att')
     +'<div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px;margin-bottom:16px;overflow-x:auto;">'
     +'<div style="font-size:11px;font-weight:700;color:#5a5a54;margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;">Calificaciones por Atributo</div>'
-    +'<table style="border-collapse:collapse;font-size:12px;"><thead><tr>'+thOps+'</tr></thead><tbody>'+rows+'</tbody></table>'
+    +'<table style="border-collapse:collapse;font-size:12px;"><thead>'+head1+'</thead><tbody>'+rows+'</tbody></table>'
     +'</div><div id="grr-results-att"></div>';
 }
 
@@ -10902,12 +11055,14 @@ function grrAttSetDirect(sel){
 function grrAttUpdate(){
   var el=document.getElementById('grr-results-att');
   if(!el)return;
-  var ops=Array.from({length:GKS.operators},function(_,i){return 'Operario '+(i+1);});
-  var ref=GKS.data['Referencia']||[];
+  var ops=attOps();
+  var ref=attRefRep();
   var nCats=GKS.categories.length;
+  var st=attStats();
   var rows='',allKappas=[];
+  if(st.within) st.within.forEach(function(w){ allKappas.push(w.kappa); });
   for(var oi=0;oi<ops.length;oi++){
-    var k=calcKappa(ref,GKS.data[ops[oi]]||[],nCats);
+    var k=calcKappa(ref,attSeries(ops[oi]),nCats);
     allKappas.push(k.kappa);
     rows+='<tr><td style="padding:8px 10px;font-weight:600;">'+ops[oi]+' vs Referencia</td>'
       +'<td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px;">'+k.kappa.toFixed(3)+'</td>'
@@ -10917,7 +11072,7 @@ function grrAttUpdate(){
       +'</tr>';
   }
   for(var i=0;i<ops.length;i++) for(var j=i+1;j<ops.length;j++){
-    var k2=calcKappa(GKS.data[ops[i]]||[],GKS.data[ops[j]]||[],nCats);
+    var k2=calcKappa(attSeries(ops[i]),attSeries(ops[j]),nCats);
     allKappas.push(k2.kappa);
     rows+='<tr><td style="padding:8px 10px;font-weight:600;">'+ops[i]+' vs '+ops[j]+'</td>'
       +'<td style="padding:8px 10px;text-align:center;font-family:monospace;font-size:12px;">'+k2.kappa.toFixed(3)+'</td>'
@@ -10929,10 +11084,13 @@ function grrAttUpdate(){
   var avgK=allKappas.length?allKappas.reduce(function(a,b){return a+b;},0)/allKappas.length:0;
   el.innerHTML='<div style="background:'+kBg(avgK)+';border-radius:10px;padding:13px 16px;margin-bottom:16px;border-left:4px solid '+kClr(avgK)+'">'
     +'<div style="font-size:14px;font-weight:800;color:'+kClr(avgK)+';margin-bottom:4px;">'+grrIco(avgK>=0.9?'ok':avgK>=0.7?'wn':'no')+' '+kLbl(avgK)+' &mdash; &#x3BA; promedio = '+avgK.toFixed(3)+'</div>'
-    +'<div style="font-size:12px;color:#374151;">'+(avgK>=0.9?'Altamente consistente. Procede con la recolección de datos de atributos.':avgK>=0.7?'Aceptable. La capacitación de los operarios puede mejorar la consistencia.':'Inconsistente. Revisa los criterios o vuelve a capacitar a los operadores.')+'</div>'
+    +'<div style="font-size:12px;color:#374151;">'+(avgK>=0.9?'Altamente consistente. Procede con la recolección de datos de atributos.':avgK>=0.7?'Aceptable. La capacitación de los operarios puede mejorar la consistencia.':'Inconsistente. Revisa los criterios o vuelve a capacitar a los operadores.')
+    +(st.within?' <span style="color:#5a5a54;">(El promedio incluye la repetibilidad de cada operario.)</span>':'')+'</div>'
     +'</div>'
+    +attAgreementTablesHTML(st)
     +'<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:14px;overflow-x:auto;">'
-    +'<div style="font-size:13px;font-weight:700;margin-bottom:10px;">Resultados de Kappa de Cohen</div>'
+    +'<div style="font-size:13px;font-weight:700;margin-bottom:4px;">Resultados de Kappa de Cohen</div>'
+    +(st.T>1?'<div style="font-size:11px;color:#5a5a54;margin-bottom:10px;">Se comparan las '+(st.nP*st.T)+' calificaciones de cada operario ('+st.nP+' partes &times; '+st.T+' ensayos), ensayo con ensayo.</div>':'<div style="margin-bottom:6px;"></div>')
     +'<table style="border-collapse:collapse;font-size:12px;width:100%;">'
     +'<thead><tr>'
     +'<th style="background:#1a1a18;color:#fff;padding:8px 10px;text-align:left;">Comparación</th>'
@@ -10957,10 +11115,10 @@ function grrAttUpdate(){
 function grrPasteBox(kind){
   var isAtt = kind==='att';
   var ph = isAtt
-    ? 'Referencia\tOperario 1\tOperario 2&#10;0\t0\t1&#10;1\t1\t1&#10;...'
+    ? 'Referencia\tOp1 E1\tOp1 E2\tOp2 E1\tOp2 E2&#10;0\t0\t0\t1\t0&#10;1\t1\t1\t1\t1&#10;...'
     : '10.02\t10.01\t10.05\t10.04&#10;9.98\t9.99\t10.00\t10.01&#10;...';
   var help = isAtt
-    ? 'Columnas: <b>Referencia</b>, <b>Operario 1</b>, <b>Operario 2</b>… &nbsp;|&nbsp; Filas: una por parte. Valores: <b>0 = Conforme</b>, <b>1 = No conforme</b> (o escribe &laquo;Conforme&raquo; / &laquo;No conforme&raquo;).'
+    ? 'Columnas: <b>Referencia</b> y luego, por cada operario, sus ensayos seguidos: <b>Op1 Ensayo 1, Op1 Ensayo 2…, Op2 Ensayo 1…</b> (se usan los <b>ensayos por operario</b> configurados arriba: '+attTrials()+') &nbsp;|&nbsp; Filas: una por parte. Valores: <b>0 = Conforme</b>, <b>1 = No conforme</b> (o escribe &laquo;Conforme&raquo; / &laquo;No conforme&raquo;).'
     : 'Columnas: <b>Operador A Rep.1, Rep.2…, Operador B Rep.1, Rep.2…</b> (en el mismo orden de la tabla) &nbsp;|&nbsp; Filas: una por parte. El n.&ordm; de operadores se calcula con las columnas y las <b>réplicas</b> configuradas arriba ('+GS.reps+').';
   return '<div style="background:#E6F1FB;border:1.5px solid #85B7EB;border-radius:10px;padding:14px 16px;margin-bottom:18px;">'
     +'<div style="font-size:13px;font-weight:700;color:#185FA5;margin-bottom:6px;">&#x1F4CB; Pegar datos desde Excel</div>'
@@ -11070,16 +11228,20 @@ function grrPasteApply(kind){
     }
   }
   if(isAtt){
-    var nOps=C-1;
-    if(nOps<2 || nOps>8){ grrPasteMsg(kind,'Se necesitan de 2 a 8 operarios además de la Referencia (columnas pegadas: '+C+').',false); return; }
+    var Tt=attTrials();
+    if((C-1)%Tt!==0){ grrPasteMsg(kind,'Pegaste '+(C-1)+' columnas de operarios (sin contar la Referencia), que no es múltiplo de los ensayos configurados ('+Tt+'). Ajusta «Ensayos por operario» o revisa las columnas.',false); return; }
+    var nOps=(C-1)/Tt;
+    if(nOps<2 || nOps>8){ grrPasteMsg(kind,'Se necesitan de 2 a 8 operarios además de la Referencia (resultan '+nOps+' con '+Tt+' ensayo(s) cada uno).',false); return; }
     if(R<5 || R>100){ grrPasteMsg(kind,'El número de partes debe estar entre 5 y 100 (filas pegadas: '+R+').',false); return; }
     GKS.operators=nOps; GKS.parts=R; GKS.data={};
-    for(var c=0;c<C;c++){
-      var key = c===0 ? 'Referencia' : 'Operario '+c;
+    GKS.data['Referencia']=vals.map(function(r){return r[0];});
+    for(var c=1;c<C;c++){
+      var oIdx=Math.floor((c-1)/Tt), tIdx=(c-1)%Tt;
+      var key = attKey('Operario '+(oIdx+1), tIdx);
       GKS.data[key]=vals.map(function(r){return r[c];});
     }
     grrRebuildAtt();
-    grrPasteMsg('att','Datos cargados: '+R+' partes, Referencia y '+nOps+' operarios.',true);
+    grrPasteMsg('att','Datos cargados: '+R+' partes, Referencia y '+nOps+' operarios × '+Tt+' ensayo(s).',true);
   } else {
     if(C % GS.reps !== 0){ grrPasteMsg(kind,'Pegaste '+C+' columnas, que no es múltiplo de las réplicas configuradas ('+GS.reps+'). Ajusta «Réplicas» o revisa las columnas.',false); return; }
     var nO=C/GS.reps;
@@ -11106,16 +11268,18 @@ function attDecision(chosenIdx){
   var fb=document.getElementById('att-dec-fb');
   if(!fb||!ops.length) return;
   var correct=chosenIdx===bestIdx;
+  var rp=window._attRepeat;
+  var rpTxt=function(i){ return rp?', repetibilidad '+rp[i].toFixed(1)+'%':''; };
   var chosen=ops[chosenIdx], best=ops[bestIdx];
   var clr=correct?'#0F6E56':'#B23B17';
   var bg=correct?'#E1F5EE':'#FBE3DE';
   var ico=correct?'&#x2714; ¡Correcto!':'&#x2715; Incorrecto.';
   var msg=correct
     ?best+' tiene la mejor combinación de consistencia entre operarios ('+
-      (selfC[bestIdx]*100).toFixed(1)+'%) y acuerdo con la referencia ('+vsR[bestIdx].toFixed(1)+'%). ¡Buena decisión!'
+      (selfC[bestIdx]*100).toFixed(1)+'%) y acuerdo con la referencia ('+vsR[bestIdx].toFixed(1)+'%)'+rpTxt(bestIdx)+'. ¡Buena decisión!'
     :'La mejor opción es '+best+': '+
-      (selfC[bestIdx]*100).toFixed(1)+'% de consistencia entre operarios y '+vsR[bestIdx].toFixed(1)+'% de acuerdo con la referencia. '+
-      chosen+' obtuvo '+( selfC[chosenIdx]*100).toFixed(1)+'% y '+vsR[chosenIdx].toFixed(1)+'% respectivamente.';
+      (selfC[bestIdx]*100).toFixed(1)+'% de consistencia entre operarios y '+vsR[bestIdx].toFixed(1)+'% de acuerdo con la referencia'+rpTxt(bestIdx)+'. '+
+      chosen+' obtuvo '+( selfC[chosenIdx]*100).toFixed(1)+'% y '+vsR[chosenIdx].toFixed(1)+'% respectivamente'+(rp?' (repetibilidad '+rp[chosenIdx].toFixed(1)+'%)':'')+'.';
   fb.innerHTML='<div style="background:'+bg+';border-radius:6px;padding:10px 12px;border-left:3px solid '+clr+';">'
     +'<div style="font-weight:700;color:'+clr+';margin-bottom:4px;">'+ico+'</div>'
     +'<div style="font-size:12px;color:#1a1a18;line-height:1.6;">'+msg+'</div>'
@@ -11126,10 +11290,11 @@ grrInitSampleData();
 grrInitAttSample();
 
 
-function buildIntervalChart(opStats, pairStats, ops){
+function buildIntervalChart(opStats, pairStats, ops, withinStats){
   // Wilson confidence interval for proportion
   function wilsonCI(agree, n, z){
     if(n===0) return {lo:0,hi:0};
+    if(typeof attExactCI==='function') return attExactCI(agree,n);
     z=z||1.96;
     var p=agree/n;
     var denom=1+z*z/n;
@@ -11201,7 +11366,7 @@ function buildIntervalChart(opStats, pairStats, ops){
 
   // Build data arrays with Wilson CI
   // Panel 1: individual by operator (operator vs themselves - using vs reference as proxy)
-  var indData = opStats.map(function(s,i){
+  var indData = (withinStats||opStats).map(function(s,i){
     var ci=wilsonCI(s.agree,s.n,1.96);
     return {label:'Op '+(i+1), pct:s.pct, lo:ci.lo, hi:ci.hi};
   });
@@ -11216,7 +11381,8 @@ function buildIntervalChart(opStats, pairStats, ops){
   var svg2=makeSVG('Evaluador vs. el estándar', refData);
 
   return '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;margin-bottom:16px;">'
-    +'<div style="font-size:12px;font-weight:700;color:#1a1a18;margin-bottom:12px;">Acuerdo de Evaluación (IC 95%)</div>'
+    +'<div style="font-size:12px;font-weight:700;color:#1a1a18;margin-bottom:4px;">Acuerdo de Evaluación (IC 95%)</div>'
+    +'<div style="font-size:11px;color:#5a5a54;margin-bottom:12px;">'+(withinStats?'Izquierda: repetibilidad (cada operario vs. sí mismo entre ensayos). Derecha: cada operario vs. la Referencia.':'Con 1 ensayo, el panel izquierdo repite la comparación vs. la Referencia. Usa 2 o más ensayos para ver la repetibilidad real.')+'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;overflow-x:auto;">'
     +'<div>'+svg1+'</div>'
     +'<div>'+svg2+'</div>'
@@ -11238,10 +11404,12 @@ function attSemSVG(pct, t1, t2){
 
 function buildConcordanceHTML(){
   if(!GKS.data['Referencia']) grrInitAttSample();
-  var ops = Array.from({length:GKS.operators},function(_,i){return 'Operario '+(i+1);});
-  var ref = GKS.data['Referencia']||[];
+  var ops = attOps();
+  var ref = attRef();
   var nP = GKS.parts;
   var nCats = GKS.categories.length;
+  var T = attTrials();
+  var st = attStats();
 
   // 1. Within-operator agreement (each operator vs themselves across trials)
   //    We only have 1 trial here, so instead compute:
@@ -11250,32 +11418,19 @@ function buildConcordanceHTML(){
   //    - Overall % agreement (all operators agree on same item)
 
   // Per-operator stats vs reference
-  var opStats = ops.map(function(op){
-    var data = GKS.data[op]||[];
-    var agree=0, n=Math.min(data.length, ref.length, nP);
-    for(var i=0;i<n;i++) if(data[i]===ref[i]) agree++;
-    return {op:op, agree:agree, n:n, pct:n>0?agree/n*100:0};
-  });
+  // Parte en acuerdo = TODOS los ensayos del operario coinciden con la Referencia
+  var opStats = st.vsStd.map(function(o){ return {op:o.op, agree:o.agree, n:o.n, pct:o.pct}; });
 
   // Overall: all operators AND reference agree on every item
-  var overallAgree=0;
-  for(var p=0;p<nP;p++){
-    var allSame=true;
-    var refVal=ref[p];
-    for(var oi=0;oi<ops.length;oi++){
-      var d=GKS.data[ops[oi]]||[];
-      if(d[p]!==refVal){allSame=false;break;}
-    }
-    if(allSame) overallAgree++;
-  }
-  var overallPct = nP>0?overallAgree/nP*100:0;
+  var overallAgree=st.allStd.agree;
+  var overallPct = st.allStd.pct;
 
   // Between operators
   var pairStats=[];
   for(var i=0;i<ops.length;i++){
     for(var j=i+1;j<ops.length;j++){
-      var d1=GKS.data[ops[i]]||[], d2=GKS.data[ops[j]]||[];
-      var ag=0,n2=Math.min(d1.length,d2.length,nP);
+      var d1=attSeries(ops[i]), d2=attSeries(ops[j]);
+      var ag=0,n2=Math.min(d1.length,d2.length);
       for(var k=0;k<n2;k++) if(d1[k]===d2[k]) ag++;
       pairStats.push({a:ops[i],b:ops[j],agree:ag,n:n2,pct:n2>0?ag/n2*100:0});
     }
@@ -11283,16 +11438,16 @@ function buildConcordanceHTML(){
 
   // Kappa per operator vs reference
   var kappaStats = ops.map(function(op){
-    var k=calcKappa(ref,GKS.data[op]||[],nCats);
+    var k=calcKappa(attRefRep(),attSeries(op),nCats);
     return {op:op,kappa:k.kappa};
   });
 
   // Confusion matrix for first operator vs reference
   var cm = [];
   for(var i=0;i<nCats;i++){cm.push([]);for(var j2=0;j2<nCats;j2++)cm[i].push(0);}
-  var d0=GKS.data[ops[0]]||[];
-  for(var p2=0;p2<nP;p2++){
-    var rv=ref[p2],ov=d0[p2];
+  var d0=attSeries(ops[0]), refR0=attRefRep();
+  for(var p2=0;p2<d0.length;p2++){
+    var rv=refR0[p2],ov=d0[p2];
     if(rv>=0&&rv<nCats&&ov>=0&&ov<nCats)cm[rv][ov]++;
   }
 
@@ -11330,7 +11485,7 @@ function buildConcordanceHTML(){
   html+='<div style="background:'+obg+';border-radius:8px;padding:12px;text-align:center;border-left:4px solid '+oclr+';">'
     +'<div style="font-size:10px;font-weight:700;color:#5a5a54;text-transform:uppercase;margin-bottom:4px;">Acuerdo General</div>'
     +'<div style="font-size:26px;font-weight:800;color:'+oclr+';">'+overallPct.toFixed(0)+'%</div>'
-    +'<div style="font-size:10px;color:#5a5a54;">todos coinciden</div></div>';
+    +'<div style="font-size:10px;color:#5a5a54;">todos coinciden'+(T>1?' (todos los ensayos)':'')+'</div></div>';
   // Per operator
   opStats.forEach(function(s){
     var clr2=s.pct>=90?'#0F6E56':s.pct>=70?'#856404':'#B23B17';
@@ -11338,12 +11493,13 @@ function buildConcordanceHTML(){
     html+='<div style="background:'+bg2+';border-radius:8px;padding:12px;text-align:center;border-left:4px solid '+clr2+';">'
       +'<div style="font-size:10px;font-weight:700;color:#5a5a54;text-transform:uppercase;margin-bottom:4px;">'+s.op+' vs Ref.</div>'
       +'<div style="font-size:26px;font-weight:800;color:'+clr2+';">'+s.pct.toFixed(0)+'%</div>'
-      +'<div style="font-size:10px;color:#5a5a54;">&kappa; = '+(kappaStats.find(function(k){return k.op===s.op;})||{kappa:0}).kappa.toFixed(3)+'</div></div>';
+      +'<div style="font-size:10px;color:#5a5a54;">&kappa; = '+(kappaStats.find(function(k){return k.op===s.op;})||{kappa:0}).kappa.toFixed(3)+'</div>'
+      +(st.within?'<div style="font-size:10px;color:#185FA5;font-weight:700;margin-top:3px;">Repetibilidad: '+(st.within.find(function(w){return w.op===s.op;})||{pct:0}).pct.toFixed(0)+'%</div>':'')+'</div>';
   });
   html+='</div>';
 
   // Interval chart (Minitab style)
-  html+=buildIntervalChart(opStats, pairStats, ops);
+  html+=buildIntervalChart(opStats, pairStats, ops, st.within);
 
   // Bar chart
   html+='<div style="margin-bottom:18px;">'+svgBars+'</div>';
@@ -11387,14 +11543,14 @@ function buildConcordanceHTML(){
   html+='</tbody></table></div>';
 
   // Confusion matrix for each operator vs reference
-  html+='<div style="font-size:12px;font-weight:700;color:#1a1a18;margin-bottom:8px;">Matrices de Confusión (Operario vs Referencia)</div>'
+  html+='<div style="font-size:12px;font-weight:700;color:#1a1a18;margin-bottom:8px;">Matrices de Confusión (Operario vs Referencia)'+(T>1?' — '+T+' ensayos acumulados':'')+'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px;">';
   ops.forEach(function(op){
     var cmOp=[];
     for(var i=0;i<nCats;i++){cmOp.push([]);for(var j=0;j<nCats;j++)cmOp[i].push(0);}
-    var dop=GKS.data[op]||[];
-    for(var p3=0;p3<nP;p3++){
-      var rv2=ref[p3],ov2=dop[p3];
+    var dop=attSeries(op), refR3=attRefRep();
+    for(var p3=0;p3<dop.length;p3++){
+      var rv2=refR3[p3],ov2=dop[p3];
       if(rv2>=0&&rv2<nCats&&ov2>=0&&ov2<nCats)cmOp[rv2][ov2]++;
     }
     html+='<div style="background:#fafafa;border:1px solid #e2e8f0;border-radius:8px;padding:12px;">'
@@ -11434,7 +11590,7 @@ function buildConcordanceHTML(){
     var kappas=[];
     ops.forEach(function(op2,oi2){
       if(oi!==oi2){
-        var k=calcKappa(GKS.data[op]||[],GKS.data[op2]||[],nCats);
+        var k=calcKappa(attSeries(op),attSeries(op2),nCats);
         kappas.push(k.kappa);
       }
     });
@@ -11449,6 +11605,7 @@ function buildConcordanceHTML(){
     +'Analiza los semáforos y decide cuál operario tiene el mejor desempeño. '
     +'<b style="color:#fcd34d;">Semáforo 1:</b> consistencia entre operarios. '
     +'<b style="color:#86efac;">Semáforo 2:</b> acuerdo con la Referencia.'
+    +(T>1?' <b style="color:#93c5fd;">Semáforo 3:</b> repetibilidad (coincide consigo mismo entre ensayos).':'')
     +'</div>'
     +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-bottom:14px;">';
 
@@ -11457,6 +11614,8 @@ function buildConcordanceHTML(){
     var scClr=scPct>=90?'#86efac':scPct>=70?'#fcd34d':'#fca5a5';
     var vrClr=vrPct>=90?'#86efac':vrPct>=70?'#fcd34d':'#fca5a5';
     var kv=(kappaStats.find(function(k){return k.op===op;})||{kappa:0}).kappa;
+    var rpPct=st.within?st.within[oi].pct:null;
+    var rpClr=rpPct===null?'#fff':rpPct>=90?'#86efac':rpPct>=70?'#fcd34d':'#fca5a5';
     decHtml+='<div style="background:rgba(255,255,255,.07);border-radius:10px;padding:12px 14px;">'
       +'<div style="font-size:12px;font-weight:700;color:#fff;margin-bottom:10px;">'+op+'</div>'
       +'<div style="display:flex;gap:12px;align-items:center;">'
@@ -11464,16 +11623,21 @@ function buildConcordanceHTML(){
       +'<div style="font-size:9px;color:rgba(255,255,255,.5);margin-top:4px;max-width:50px;line-height:1.3;">Entre<br>operarios</div></div>'
       +'<div style="text-align:center;">'+attSemSVG(vrPct,70,90)
       +'<div style="font-size:9px;color:rgba(255,255,255,.5);margin-top:4px;max-width:50px;line-height:1.3;">Vs.<br>Referencia</div></div>'
+      +(rpPct!==null?'<div style="text-align:center;">'+attSemSVG(rpPct,70,90)+'<div style="font-size:9px;color:rgba(255,255,255,.5);margin-top:4px;max-width:50px;line-height:1.3;">Repeti-<br>bilidad</div></div>':'')
       +'<div style="display:grid;gap:4px;margin-left:4px;">'
       +'<div style="font-size:11px;color:rgba(255,255,255,.9);"><b>&#x3BA; entre ops:</b> <span style="color:'+scClr+';">'+scPct.toFixed(1)+'%</span></div>'
       +'<div style="font-size:11px;color:rgba(255,255,255,.9);"><b>% vs Ref:</b> <span style="color:'+vrClr+';">'+vrPct.toFixed(1)+'%</span></div>'
       +'<div style="font-size:11px;color:rgba(255,255,255,.9);"><b>&#x3BA; vs Ref:</b> <span style="color:'+vrClr+';">'+kv.toFixed(3)+'</span></div>'
+      +(rpPct!==null?'<div style="font-size:11px;color:rgba(255,255,255,.9);"><b>Repetib.:</b> <span style="color:'+rpClr+';">'+rpPct.toFixed(1)+'%</span></div>':'')
       +'</div></div></div>';
   });
 
   decHtml+='</div>';
 
-  var scores2=ops.map(function(op,oi){return selfConsist[oi]*50+vsRef2[oi]*0.5;});
+  var scores2=ops.map(function(op,oi){
+    return st.within ? (selfConsist[oi]*100+vsRef2[oi]+st.within[oi].pct)/3 : selfConsist[oi]*50+vsRef2[oi]*0.5;
+  });
+  window._attRepeat=st.within?st.within.map(function(w){return Math.round(w.pct*10)/10;}):null;
   var bestIdx2=scores2.indexOf(Math.max.apply(null,scores2));
 
   window._attBestIdx=bestIdx2;
@@ -19822,7 +19986,7 @@ function aplicarProgresoGuardado(data) {
   // ── MEDIR ──
   var me = data.medir || {};
   try { if (typeof GS !== 'undefined' && me.GS) Object.assign(GS, me.GS); } catch(e){}
-  try { if (typeof GKS !== 'undefined' && me.GKS) Object.assign(GKS, me.GKS); } catch(e){}
+  try { if (typeof GKS !== 'undefined' && me.GKS) { Object.assign(GKS, me.GKS); if (me.GKS.trials === undefined) GKS.trials = 1; } } catch(e){}
 
   // ── MEJORAR ──
   var mj = data.mejorar || {};
